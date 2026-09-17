@@ -1,0 +1,21 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+
+# Test cache
+.pytest_cache/
+
+# Coverage files
+.coverage
+htmlcov/
+
+# macOS files
+.DS_Store
+
+# VS Code settings
+.vscode/
