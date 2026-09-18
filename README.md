@@ -98,3 +98,21 @@ classDiagram
     AccountFunctions ..> AccountData : manages
     AccountFunctions ..> TransactionData : filters
 ```
+
+### UML diagram explanation
+
+The diagram represents the dictionary-based domain model used in Phase 1.
+
+#### Multiplicity
+
+- `1` means exactly one.
+- `0..*` means zero, one, or any number of elements.
+- Therefore, one account can contain zero or many transactions.
+
+For example, a newly created account initially contains no transactions:
+
+```python
+{
+    "name": "Checking",
+    "transactions": [],
+}
