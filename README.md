@@ -13,22 +13,20 @@ The Personal Finance Tracker manages income and expense transactions.
 - Filtering by category
 - Filtering by transaction type
 - Automated tests with pytest
+- Test-driven development
 
 ## Run the tests
 
 ```bash
 uv sync
 uv run pytest -v
+```
 
-## Phase 1 UML diagram
+Expected result:
 
-The following diagram shows the dictionary-based domain model and the
-relationships between categories, transactions, and accounts.
-
-![Phase 1 UML diagram](docs/phase_1_uml.png)
-
-The editable draw.io source file is available in
-[`docs/phase_1_uml.drawio`](docs/phase_1_uml.drawio).
+```text
+33 passed
+```
 
 ## Phase 1 UML diagram
 
@@ -96,7 +94,7 @@ classDiagram
     TransactionData --> Category : uses
     TransactionData --> TransactionType : uses
     AccountData "1" o-- "0..*" TransactionData : contains
-    TransactionFunctions ..> TransactionData : creates and processes
+    TransactionFunctions ..> TransactionData : processes
     AccountFunctions ..> AccountData : manages
     AccountFunctions ..> TransactionData : filters
 ```
