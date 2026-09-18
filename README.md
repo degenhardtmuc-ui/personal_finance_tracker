@@ -105,14 +105,36 @@ The diagram represents the dictionary-based domain model used in Phase 1.
 
 #### Multiplicity
 
-- `1` means exactly one.
+- `1` means exactly one element.
 - `0..*` means zero, one, or any number of elements.
 - Therefore, one account can contain zero or many transactions.
 
-For example, a newly created account initially contains no transactions:
+A newly created account initially contains no transactions. After transactions
+are added, the same account can contain multiple transaction dictionaries.
 
-```python
-{
-    "name": "Checking",
-    "transactions": [],
-}
+#### UML symbols
+
+| Symbol | Meaning |
+|---|---|
+| `+` | Public field or function |
+| `1` | Exactly one element |
+| `0..*` | Zero to any number of elements |
+| `o--` | Aggregation: an account contains transactions |
+| `-->` | Association: one element uses another element |
+| `..>` | Dependency: a function creates, reads, or processes data |
+| `<<enumeration>>` | A fixed collection of allowed values |
+| `<<dictionary>>` | Data is represented by a Python dictionary |
+| `: uses` | A transaction uses an enum value |
+| `: contains` | An account contains transaction dictionaries |
+| `: manages` | Functions manage account data |
+| `: filters` | Functions select matching transactions |
+| `: processes` | Functions create or process transaction data |
+
+#### Relationships
+
+- `TransactionData --> Category`: Each transaction uses one category, such as `FOOD` or `HOUSING`.
+- `TransactionData --> TransactionType`: Each transaction is either `INCOME` or `EXPENSE`.
+- `AccountData "1" o-- "0..*" TransactionData`: One account contains zero or many transactions.
+- `TransactionFunctions ..> TransactionData`: The functions create, validate, format, and evaluate transaction dictionaries.
+- `AccountFunctions ..> AccountData`: The functions create and manage account dictionaries.
+- `AccountFunctions ..> TransactionData`: The functions calculate totals and filter transaction dictionaries.
