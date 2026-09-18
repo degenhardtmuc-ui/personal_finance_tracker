@@ -138,3 +138,19 @@ are added, the same account can contain multiple transaction dictionaries.
 - `TransactionFunctions ..> TransactionData`: The functions create, validate, format, and evaluate transaction dictionaries.
 - `AccountFunctions ..> AccountData`: The functions create and manage account dictionaries.
 - `AccountFunctions ..> TransactionData`: The functions calculate totals and filter transaction dictionaries.
+
+## Test-Driven Development
+
+Phase 1 was developed using the TDD cycle:
+
+1. **RED:** The tests were written before the implementation and initially failed.
+2. **GREEN:** The required functions were implemented until all tests passed.
+3. **REFACTOR:** The code was reviewed and improved while keeping all tests green.
+
+### RED – failing tests before implementation
+
+![TDD RED phase](docs/tdd_red.png)
+
+### GREEN – all tests passing after implementation
+
+![TDD GREEN phase](docs/tdd_green.png)
