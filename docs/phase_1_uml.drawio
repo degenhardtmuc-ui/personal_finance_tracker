@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" compressed="false">
+  <diagram id="pyfinanz-dict-phase1" name="Phase 1 Dictionary UML">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="2" value="PyFinanz - Phase 1 mit Dictionaries und TDD" style="text;html=0;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#E76F00;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="700" height="45" as="geometry"/>
+        </mxCell>
+        <mxCell id="3" value="&lt;&lt;enumeration&gt;&gt;&#xa;Category&#xa;----------------------&#xa;HOUSING&#xa;FOOD&#xa;TRANSPORT&#xa;ENTERTAINMENT&#xa;HEALTH&#xa;EDUCATION&#xa;CLOTHING&#xa;SALARY&#xa;FREELANCE&#xa;INVESTMENT&#xa;OTHER" style="rounded=0;whiteSpace=wrap;html=0;align=left;verticalAlign=top;spacing=10;fillColor=#FFF4E8;strokeColor=#E76F00;strokeWidth=2;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="105" width="215" height="315" as="geometry"/>
+        </mxCell>
+        <mxCell id="4" value="&lt;&lt;enumeration&gt;&gt;&#xa;TransactionType&#xa;----------------------&#xa;INCOME&#xa;EXPENSE" style="rounded=0;whiteSpace=wrap;html=0;align=left;verticalAlign=top;spacing=10;fillColor=#FFF4E8;strokeColor=#E76F00;strokeWidth=2;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="470" width="215" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="5" value="&lt;&lt;dictionary&gt;&gt;&#xa;TransactionData&#xa;------------------------------------&#xa;description: str&#xa;amount: float&#xa;transaction_type: TransactionType&#xa;category: Category&#xa;date: str&#xa;tags: set[str]" style="rounded=0;whiteSpace=wrap;html=0;align=left;verticalAlign=top;spacing=10;fillColor=#FFFFFF;strokeColor=#E76F00;strokeWidth=2;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="345" y="105" width="310" height="245" as="geometry"/>
+        </mxCell>
+        <mxCell id="6" value="&lt;&lt;module&gt;&gt;&#xa;transaction.py&#xa;------------------------------------&#xa;+ create_transaction(...): dict&#xa;+ is_expense(transaction): bool&#xa;+ is_income(transaction): bool&#xa;+ signed_amount(transaction): float&#xa;+ format_transaction(transaction): str" style="rounded=0;whiteSpace=wrap;html=0;align=left;verticalAlign=top;spacing=10;fillColor=#F7F7F7;strokeColor=#666666;strokeWidth=2;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="345" y="420" width="310" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="7" value="&lt;&lt;dictionary&gt;&gt;&#xa;AccountData&#xa;------------------------------------&#xa;name: str&#xa;transactions: list[TransactionData]" style="rounded=0;whiteSpace=wrap;html=0;align=left;verticalAlign=top;spacing=10;fillColor=#FFFFFF;strokeColor=#E76F00;strokeWidth=2;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="790" y="105" width="300" height="155" as="geometry"/>
+        </mxCell>
+        <mxCell id="8" value="&lt;&lt;module&gt;&gt;&#xa;account.py&#xa;------------------------------------&#xa;+ create_account(name): dict&#xa;+ add_transaction(account, transaction): None&#xa;+ calculate_balance(account): float&#xa;+ calculate_income_total(account): float&#xa;+ calculate_expense_total(account): float&#xa;+ filter_by_category(account, category): list&#xa;+ filter_by_type(account, type): list" style="rounded=0;whiteSpace=wrap;html=0;align=left;verticalAlign=top;spacing=10;fillColor=#F7F7F7;strokeColor=#666666;strokeWidth=2;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="790" y="350" width="365" height="290" as="geometry"/>
+        </mxCell>
+        <mxCell id="9" value="contains" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=0;startArrow=diamondThin;startFill=1;endArrow=none;strokeColor=#555555;strokeWidth=2;fontSize=12;" edge="1" parent="1" source="7" target="5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="10" value="creates and evaluates" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=0;endArrow=open;endFill=0;dashed=1;strokeColor=#777777;fontSize=12;" edge="1" parent="1" source="6" target="5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="11" value="manages" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=0;endArrow=open;endFill=0;dashed=1;strokeColor=#777777;fontSize=12;" edge="1" parent="1" source="8" target="7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="12" value="uses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=0;endArrow=open;endFill=0;dashed=1;strokeColor=#777777;fontSize=12;" edge="1" parent="1" source="5" target="3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="13" value="uses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=0;endArrow=open;endFill=0;dashed=1;strokeColor=#777777;fontSize=12;" edge="1" parent="1" source="5" target="4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="14" value="1" style="text;html=0;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="745" y="164" width="25" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="15" value="0..*" style="text;html=0;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="675" y="164" width="40" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="16" value="TDD-Reihenfolge: 1. Test schreiben  2. Test rot  3. minimal implementieren  4. Test grün  5. verbessern" style="rounded=1;whiteSpace=wrap;html=0;align=left;verticalAlign=middle;spacing=10;fillColor=#FFF4E8;strokeColor=#E76F00;fontSize=12;fontColor=#444444;" vertex="1" parent="1">
+          <mxGeometry x="345" y="705" width="810" height="70" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
