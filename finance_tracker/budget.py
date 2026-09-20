@@ -1,6 +1,8 @@
 """Provide dictionary-based budget and budget tracker functions."""
 
+from finance_tracker.analysis import validate_month
 from finance_tracker.category import Category
+from finance_tracker.transaction import is_expense
 
 
 def create_budget(
@@ -9,7 +11,30 @@ def create_budget(
     month: str,
 ) -> dict:
     """Create and return a validated budget dictionary."""
-    raise NotImplementedError
+    if monthly_limit <= 0:
+        raise ValueError("Monthly limit must be positive")
+
+    validate_month(month)
+
+    return {
+        "category": category,
+        "monthly_limit": monthly_limit,
+        "month": month,
+    }
+
+
+def calculate_spent_amount(
+    budget: dict,
+    account: dict,
+) -> float:
+    """Return the expenses matching a budget's category and month."""
+    return sum(
+        transaction["amount"]
+        for transaction in account["transactions"]
+        if is_expense(transaction)
+        and transaction["category"] == budget["category"]
+        and transaction["date"].startswith(budget["month"])
+    )
 
 
 def remaining(
@@ -17,7 +42,9 @@ def remaining(
     account: dict,
 ) -> float:
     """Return the unused amount of a budget."""
-    raise NotImplementedError
+    spent = calculate_spent_amount(budget, account)
+
+    return budget["monthly_limit"] - spent
 
 
 def is_exceeded(
@@ -25,7 +52,7 @@ def is_exceeded(
     account: dict,
 ) -> bool:
     """Return whether the budget limit has been exceeded."""
-    raise NotImplementedError
+    return remaining(budget, account) < 0
 
 
 def usage_percentage(
@@ -33,12 +60,16 @@ def usage_percentage(
     account: dict,
 ) -> float:
     """Return the percentage of the budget that has been used."""
-    raise NotImplementedError
+    spent = calculate_spent_amount(budget, account)
+
+    return spent / budget["monthly_limit"] * 100
 
 
 def create_budget_tracker() -> dict:
     """Create and return an empty budget tracker dictionary."""
-    raise NotImplementedError
+    return {
+        "budgets": [],
+    }
 
 
 def set_budget(
@@ -48,7 +79,21 @@ def set_budget(
     month: str,
 ) -> None:
     """Add a budget or replace an existing budget."""
-    raise NotImplementedError
+    new_budget = create_budget(
+        category=category,
+        monthly_limit=monthly_limit,
+        month=month,
+    )
+
+    for index, existing_budget in enumerate(tracker["budgets"]):
+        same_category = existing_budget["category"] == category
+        same_month = existing_budget["month"] == month
+
+        if same_category and same_month:
+            tracker["budgets"][index] = new_budget
+            return
+
+    tracker["budgets"].append(new_budget)
 
 
 def check_budgets(
@@ -56,7 +101,13 @@ def check_budgets(
     account: dict,
 ) -> list[tuple[dict, float]]:
     """Return every budget together with its usage percentage."""
-    raise NotImplementedError
+    return [
+        (
+            budget,
+            usage_percentage(budget, account),
+        )
+        for budget in tracker["budgets"]
+    ]
 
 
 def exceeded_budgets(
@@ -64,4 +115,8 @@ def exceeded_budgets(
     account: dict,
 ) -> list[dict]:
     """Return all budgets whose limits have been exceeded."""
-    raise NotImplementedError
+    return [
+        budget
+        for budget in tracker["budgets"]
+        if is_exceeded(budget, account)
+    ]
