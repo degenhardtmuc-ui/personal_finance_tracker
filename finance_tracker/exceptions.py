@@ -14,11 +14,19 @@ class CsvImportError(Exception):
         reason: str,
     ) -> None:
         """Initialize the error with a line number and reason."""
-        raise NotImplementedError
+        self.line_number = line_number
+        self.reason = reason
+
+        super().__init__(
+            f"CSV import error on line {line_number}: {reason}"
+        )
 
     def __str__(self) -> str:
         """Return a readable description of the import error."""
-        raise NotImplementedError
+        return (
+            f"CSV import error on line {self.line_number}: "
+            f"{self.reason}"
+        )
 
 
 class BudgetNotFoundError(LookupError):
