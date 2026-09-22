@@ -183,7 +183,7 @@ management.
 - Detection of exceeded budgets
 - Replacement of existing budgets for the same category and month
 
-### Testing
+## Testing
 
 Phase 2 was developed with Test-Driven Development:
 
@@ -194,9 +194,8 @@ Phase 2 was developed with Test-Driven Development:
 
 ```text
 64 passed
+```
 
-
-````markdown
 ## Phase 2 UML diagram
 
 Phase 2 extends the core model with filtering, search, financial analysis,
@@ -227,21 +226,21 @@ classDiagram
     }
 
     class AnalysisFunctions {
-        +filter_by_date_range(account, start, end)
-        +filter_by_month(account, month)
-        +search_transactions(account, query)
-        +filter_by_tags(account, tags)
-        +monthly_summary(account)
-        +category_breakdown(account)
-        +top_expenses(account, n)
-        +daily_spending(account, month)
+        +filter_by_date_range()
+        +filter_by_month()
+        +search_transactions()
+        +filter_by_tags()
+        +monthly_summary()
+        +category_breakdown()
+        +top_expenses()
+        +daily_spending()
     }
 
     class BudgetData {
         <<dictionary>>
         +Category category
-        +float monthly_limit
         +str month
+        +float limit
     }
 
     class BudgetTrackerData {
@@ -250,98 +249,21 @@ classDiagram
     }
 
     class BudgetFunctions {
-        +create_budget(category, limit, month)
-        +calculate_spent_amount(budget, account)
-        +remaining(budget, account)
-        +is_exceeded(budget, account)
-        +usage_percentage(budget, account)
+        +create_budget()
+        +remaining()
+        +is_exceeded()
+        +usage_percentage()
         +create_budget_tracker()
-        +set_budget(tracker, category, limit, month)
-        +check_budgets(tracker, account)
-        +exceeded_budgets(tracker, account)
+        +set_budget()
+        +check_budgets()
+        +exceeded_budgets()
     }
 
     AccountData "1" o-- "0..*" TransactionData : contains
-    BudgetTrackerData "1" o-- "0..*" BudgetData : contains
-
     AnalysisFunctions ..> AccountData : analyzes
     AnalysisFunctions ..> TransactionData : processes
-
-    BudgetData ..> AccountData : checks spending
-    BudgetFunctions ..> BudgetData : creates
+    BudgetTrackerData "1" o-- "0..*" BudgetData : contains
+    BudgetFunctions ..> BudgetData : calculates
     BudgetFunctions ..> BudgetTrackerData : manages
     BudgetFunctions ..> AccountData : evaluates
-
-### Phase 2 UML explanation
-
-Phase 2 extends the dictionary-based data model created in Phase 1. It does not replace the existing account and transaction structures. Instead, it adds filtering, search, financial analysis, and budget management functions that process the existing data.
-
-#### New Phase 2 components
-
-* `AnalysisFunctions` represents the filtering, search, and aggregation functions implemented in `analysis.py`.
-* `BudgetData` represents one dictionary containing the information for a monthly category budget.
-* `BudgetTrackerData` represents a dictionary that stores and manages multiple budget dictionaries.
-* `BudgetFunctions` represents the budget creation, calculation, and management functions implemented in `budget.py`.
-
-#### Relationships
-
-* `AccountData "1" o-- "0..*" TransactionData`
-
-  One account contains zero or many transaction dictionaries. A newly created account can initially have an empty transaction list. More transactions can be added later.
-
-* `BudgetTrackerData "1" o-- "0..*" BudgetData`
-
-  One budget tracker contains zero or many budget dictionaries. A newly created budget tracker is initially empty and can later manage multiple budgets.
-
-* `AnalysisFunctions ..> AccountData`
-
-  The analysis functions receive an account dictionary and read its transaction list.
-
-* `AnalysisFunctions ..> TransactionData`
-
-  The analysis functions filter, search, sort, group, and summarize the transaction dictionaries stored in an account.
-
-* `BudgetData ..> AccountData`
-
-  A budget is compared with the actual expenses stored in an account. Only expenses from the matching category and month are included in the calculation.
-
-* `BudgetFunctions ..> BudgetData`
-
-  The budget functions create budget dictionaries and calculate their remaining amount, usage percentage, and exceeded status.
-
-* `BudgetFunctions ..> BudgetTrackerData`
-
-  The budget functions add new budgets, replace existing budgets, calculate usage percentages, and select exceeded budgets.
-
-* `BudgetFunctions ..> AccountData`
-
-  The budget functions read account transactions to compare actual spending with the defined monthly limits.
-
-#### Multiplicities
-
-* `1` means exactly one element.
-* `0..*` means zero to any number of elements.
-* One account dictionary can contain zero, one, or many transaction dictionaries.
-* One budget tracker dictionary can contain zero, one, or many budget dictionaries.
-* Both collections may be empty when they are created and can grow as new data is added.
-
-#### UML symbols
-
-| Symbol           | Meaning                                                   |
-| ---------------- | --------------------------------------------------------- |
-| `+`              | Public field or function                                  |
-| `1`              | Exactly one element                                       |
-| `0..*`           | Zero to any number of elements                            |
-| `o--`            | Aggregation: one structure contains other structures      |
-| `..>`            | Dependency: a function reads, creates, or processes data  |
-| `<<dictionary>>` | The data is represented by a Python dictionary            |
-| `: contains`     | One data structure contains other data structures         |
-| `: analyzes`     | Functions analyze account data                            |
-| `: processes`    | Functions filter, search, sort, or aggregate transactions |
-| `: creates`      | Functions create budget dictionaries                      |
-| `: manages`      | Functions add, replace, and check tracked budgets         |
-| `: evaluates`    | Functions compare actual expenses with budget limits      |
-
-#### Summary
-
-The Phase 2 UML diagram shows a clear separation between data and functionality. Account, transaction, budget, and budget tracker information is stored in dictionaries. The analysis and budget functions process these dictionaries without depending on a graphical user interface. This separation makes the business logic easier to test and allows it to be reused later by a Qt-based user interface.
+```
