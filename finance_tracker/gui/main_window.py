@@ -27,8 +27,10 @@ from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
+    QFileDialog,
     QFormLayout,
     QHeaderView,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -42,6 +44,7 @@ from PySide6.QtWidgets import (
 
 from finance_tracker.account import add_transaction, create_account
 from finance_tracker.category import Category, TransactionType
+from finance_tracker.json_storage import load_account, save_account
 from finance_tracker.transaction import create_transaction
 
 
@@ -91,17 +94,24 @@ class MainWindow(QMainWindow):
     def _create_transactions_tab(self) -> None:
         """Create the transactions tab and add it to the main window.
 
-        The tab uses a vertical layout. The transaction form is placed above
-        the table so that users can enter data and immediately see the newly
-        created transaction below it.
+        The tab contains three principal areas:
+
+        1. A form for entering new transaction data.
+        2. JSON controls for saving and loading the current account.
+        3. A table for displaying the account transactions.
+
+        The form and file controls are placed above the transaction table so
+        that the user can manage the account from one central interface.
         """
         transactions_tab = QWidget()
         transactions_layout = QVBoxLayout(transactions_tab)
 
         transaction_form = self._create_transaction_form()
+        json_controls = self._create_json_controls()
         self.transaction_table = self._create_transaction_table()
 
         transactions_layout.addLayout(transaction_form)
+        transactions_layout.addLayout(json_controls)
         transactions_layout.addWidget(self.transaction_table)
 
         self.tab_widget.addTab(
@@ -220,7 +230,43 @@ class MainWindow(QMainWindow):
         )
 
         return form_layout
+    
+    def _create_json_controls(self) -> QHBoxLayout:
+        """Create and return the JSON file control layout.
 
+        The layout contains one button for saving the current account and one
+        button for loading an account from a JSON file.
+
+        Object names are assigned to both buttons. Automated GUI tests use
+        these names to locate the widgets without depending on their visual
+        position.
+
+        The buttons are connected to separate handler methods. This keeps the
+        widget construction separate from the actual file operations.
+
+        Returns:
+            A horizontal layout containing the Save JSON and Load JSON
+            buttons.
+        """
+        json_controls = QHBoxLayout()
+
+        self.save_json_button = QPushButton("Save JSON")
+        self.save_json_button.setObjectName("save_json_button")
+        self.save_json_button.clicked.connect(
+            self._handle_save_json,
+        )
+
+        self.load_json_button = QPushButton("Load JSON")
+        self.load_json_button.setObjectName("load_json_button")
+        self.load_json_button.clicked.connect(
+            self._handle_load_json,
+        )
+
+        json_controls.addWidget(self.save_json_button)
+        json_controls.addWidget(self.load_json_button)
+
+        return json_controls
+    
     def _create_transaction_table(self) -> QTableWidget:
         """Create and configure the transaction table.
 
@@ -324,6 +370,98 @@ class MainWindow(QMainWindow):
         self.transaction_status_label.setText(
             "Transaction added successfully.",
         )
+    
+    def _handle_save_json(self) -> None:
+        """Open a file dialog and save the current account as JSON.
+
+        The user selects the destination with a native Qt file dialog. If no
+        file extension is entered, ``.json`` is appended automatically.
+
+        Cancelling the dialog produces an empty path. In this situation, the
+        method returns immediately and does not call the storage layer.
+
+        File-system and validation errors are caught so that an unsuccessful
+        save operation does not terminate the graphical application.
+        """
+        selected_path, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Save account as JSON",
+            "account.json",
+            "JSON files (*.json)",
+        )
+
+        if not selected_path:
+            return
+
+        if not selected_path.lower().endswith(".json"):
+            selected_path = f"{selected_path}.json"
+
+        try:
+            save_account(
+                self.account,
+                selected_path,
+            )
+        except (OSError, TypeError, ValueError) as error:
+            self.transaction_status_label.setText(
+                f"Account could not be saved: {error}",
+            )
+            return
+
+        self.transaction_status_label.setText(
+            "Account saved successfully.",
+        )
+
+    def _handle_load_json(self) -> None:
+        """Open a file dialog and load an account from a JSON file.
+
+        After successful loading, the current in-memory account is replaced by
+        the loaded dictionary. The transaction table is then rebuilt from the
+        loaded transaction dictionaries.
+
+        Cancelling the dialog leaves the existing account unchanged. Storage,
+        conversion, and validation errors are displayed in the status label
+        instead of crashing the application.
+        """
+        selected_path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Load account from JSON",
+            "",
+            "JSON files (*.json)",
+        )
+
+        if not selected_path:
+            return
+
+        try:
+            loaded_account = load_account(selected_path)
+        except (OSError, TypeError, ValueError) as error:
+            self.transaction_status_label.setText(
+                f"Account could not be loaded: {error}",
+            )
+            return
+
+        self.account = loaded_account
+        self._refresh_transaction_table()
+
+        self.transaction_status_label.setText(
+            "Account loaded successfully.",
+        )
+
+    def _refresh_transaction_table(self) -> None:
+        """Rebuild the transaction table from the current account.
+
+        Existing visual table rows are removed before the account
+        transactions are inserted again. The account dictionary itself is not
+        changed by this method.
+
+        This separation is important because the table is only a visual
+        representation of the account data. The dictionary remains the actual
+        source of truth.
+        """
+        self.transaction_table.setRowCount(0)
+
+        for transaction in self.account["transactions"]:
+            self._append_transaction_to_table(transaction)
 
     @staticmethod
     def _parse_tags(tags_text: str) -> set[str]:
