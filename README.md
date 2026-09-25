@@ -653,3 +653,309 @@ Phase 3 is complete with:
 ```text
 85 passed
 ```
+
+## Phase 4: PySide6 graphical user interface
+
+Phase 4 adds a desktop graphical user interface to the Personal Finance
+Tracker.
+
+The interface is implemented with PySide6. It uses the existing dictionary-based
+domain model and the functions developed during Phases 1 to 3. The graphical
+user interface does not replace the existing business logic. It provides a
+visual layer through which users can enter, display, save, and load financial
+data.
+
+Phase 4 is divided into several smaller TDD steps:
+
+- Phase 4A: main application window and transaction table
+- Phase 4B: transaction entry form
+- Phase 4C: JSON save and load controls
+- Phase 4D: additional graphical features
+
+### Phase 4A: Main application window
+
+Phase 4A introduces the main PySide6 application window.
+
+The `MainWindow` class represents the central window of the Personal Finance
+Tracker. It contains a `QTabWidget`, which makes it possible to organize the
+application into separate functional areas.
+
+The first tab is named `Transactions`. It contains a `QTableWidget` that
+displays the transactions stored in the current account.
+
+The transaction table contains the following columns:
+
+| Column | Purpose |
+| --- | --- |
+| Date | Date of the transaction |
+| Description | Short description of the transaction |
+| Type | Income or expense |
+| Category | Financial category |
+| Amount | Monetary value of the transaction |
+| Tags | Optional keywords associated with the transaction |
+
+The table is initially empty because a newly created account does not contain
+any transactions.
+
+#### Phase 4A TDD evidence
+
+The GUI structure was developed with Test-Driven Development.
+
+First, tests were created for the window title, tab widget, transactions tab,
+table widget, and table headers. These tests failed before the GUI components
+were implemented.
+
+**RED state:**
+
+![Phase 4A TDD RED](docs/phase_4a_tdd_red.png)
+
+After implementing the main application window and transaction table, all tests
+passed.
+
+**GREEN state:**
+
+![Phase 4A TDD GREEN](docs/phase_4a_tdd_green.png)
+
+### Phase 4B: Transaction form
+
+Phase 4B adds an interactive transaction form to the Transactions tab.
+
+The form contains the following widgets:
+
+| Widget | Purpose |
+| --- | --- |
+| Description input | Accepts a textual transaction description |
+| Amount input | Accepts the transaction amount |
+| Transaction type input | Selects income or expense |
+| Category input | Selects a financial category |
+| Date input | Selects the transaction date |
+| Tags input | Accepts optional comma-separated tags |
+| Add transaction button | Validates and adds the transaction |
+| Status label | Displays success or validation messages |
+
+When the user selects **Add transaction**, the graphical interface reads the
+values from the form. It then calls the existing `create_transaction()` function
+from the domain layer.
+
+The transaction is therefore validated by the same business logic that was
+already tested in Phase 1. The GUI does not duplicate the validation rules.
+
+If the data is valid:
+
+1. A transaction dictionary is created.
+2. The transaction is added to the current account.
+3. A new row is added to the transaction table.
+4. The description, amount, and tags text fields are cleared.
+5. A success message is displayed.
+
+If the amount is not a valid number, no transaction is added and the status
+label displays a readable validation message. The application remains open and
+can continue to be used.
+
+#### Phase 4B TDD evidence
+
+The Phase 4B tests verify that all input widgets exist, valid transactions are
+added to the table, successful input clears the appropriate fields, and invalid
+amounts are rejected.
+
+**RED state:**
+
+![Phase 4B TDD RED](docs/phase_4b_tdd_red.png)
+
+**GREEN state:**
+
+![Phase 4B TDD GREEN](docs/phase_4b_tdd_green.png)
+
+### Phase 4C: JSON file controls
+
+Phase 4C connects the graphical user interface with the JSON storage functions
+implemented in Phase 3.
+
+The Transactions tab provides two additional controls:
+
+- **Save JSON** saves the current account to a JSON file.
+- **Load JSON** loads an account from a selected JSON file.
+
+Native Qt file dialogs are used so that the user can select the destination or
+source file through the operating system.
+
+#### Saving an account
+
+When the user selects **Save JSON**, the application:
+
+1. Opens a save-file dialog.
+2. Reads the selected path.
+3. Adds the `.json` extension when necessary.
+4. Calls `save_account()` from `json_storage.py`.
+5. Displays a success message after saving.
+
+If the user cancels the dialog, the application performs no save operation and
+the current account remains unchanged.
+
+#### Loading an account
+
+When the user selects **Load JSON**, the application:
+
+1. Opens an open-file dialog.
+2. Reads the selected JSON file.
+3. Calls `load_account()` from `json_storage.py`.
+4. Replaces the current in-memory account with the loaded account.
+5. Rebuilds the transaction table from the loaded transaction dictionaries.
+6. Displays a success message after loading.
+
+If the dialog is cancelled, the current account and transaction table remain
+unchanged.
+
+Storage, conversion, and validation errors are caught by the GUI and displayed
+in the status label. This prevents file-related errors from terminating the
+application unexpectedly.
+
+#### Phase 4C TDD evidence
+
+The Phase 4C tests verify:
+
+- the existence of the save button,
+- the existence of the load button,
+- saving to the selected path,
+- safe cancellation of the save dialog,
+- loading and replacing the current account,
+- rebuilding the transaction table after loading,
+- safe cancellation of the load dialog.
+
+**RED state:**
+
+![Phase 4C TDD RED](docs/phase_4c_tdd_red.png)
+
+**GREEN state:**
+
+![Phase 4C TDD GREEN](docs/phase_4c_tdd_green.png)
+
+### Phase 4 architecture
+
+The Phase 4 GUI is a presentation layer placed on top of the existing
+dictionary-based business logic.
+
+The `MainWindow` manages the visible widgets and the current account. It uses
+the existing transaction functions to create validated transactions and the
+existing JSON storage functions to save and restore account data.
+
+```mermaid
+classDiagram
+    direction TB
+
+    class MainWindow {
+        -dict account
+        -QTabWidget tabs
+        -QTableWidget transaction_table
+        -QLabel transaction_status_label
+        +create_transactions_tab()
+        +create_transaction_form()
+        +create_json_controls()
+        +handle_add_transaction()
+        +handle_save_json()
+        +handle_load_json()
+        +refresh_transaction_table()
+    }
+
+    class AccountData {
+        <<dictionary>>
+        +str name
+        +list transactions
+    }
+
+    class TransactionData {
+        <<dictionary>>
+        +str description
+        +float amount
+        +TransactionType transaction_type
+        +Category category
+        +str date
+        +set tags
+    }
+
+    class TransactionFunctions {
+        +create_transaction()
+        +format_transaction()
+    }
+
+    class JSONStorage {
+        +save_account()
+        +load_account()
+        +account_to_dict()
+        +account_from_dict()
+    }
+
+    class QFileDialog {
+        +getSaveFileName()
+        +getOpenFileName()
+    }
+
+    AccountData "1" o-- "0..*" TransactionData : contains
+    MainWindow --> AccountData : manages
+    MainWindow ..> TransactionFunctions : creates
+    MainWindow ..> JSONStorage : saves and loads
+    MainWindow ..> QFileDialog : selects files
+    JSONStorage ..> AccountData : serializes
+```
+
+### Phase 4 UML explanation
+
+#### Components
+
+- `MainWindow` represents the central PySide6 application window.
+- `AccountData` represents the current account dictionary.
+- `TransactionData` represents one transaction dictionary.
+- `TransactionFunctions` represents the existing transaction business logic.
+- `JSONStorage` represents the JSON conversion and storage functions.
+- `QFileDialog` represents the native Qt file-selection dialogs.
+
+#### Relationships
+
+- `AccountData "1" o-- "0..*" TransactionData`
+  means that one account contains zero or multiple transaction dictionaries.
+- `MainWindow --> AccountData`
+  means that the main window manages the current account.
+- `MainWindow ..> TransactionFunctions`
+  means that the GUI uses the existing transaction functions to create and
+  validate transactions.
+- `MainWindow ..> JSONStorage`
+  means that the GUI uses the JSON storage layer to save and load accounts.
+- `MainWindow ..> QFileDialog`
+  means that the GUI uses Qt file dialogs to select JSON files.
+- `JSONStorage ..> AccountData`
+  means that the storage layer converts and serializes account data.
+
+#### Separation of responsibilities
+
+The application separates its responsibilities into different layers:
+
+| Layer | Responsibility |
+| --- | --- |
+| GUI layer | Displays widgets and processes user interaction |
+| Domain layer | Creates and validates transaction and account dictionaries |
+| Storage layer | Converts, saves, and loads JSON data |
+| Test layer | Verifies domain, storage, and GUI behaviour |
+
+This separation avoids duplicating business rules inside the graphical user
+interface. It also makes the individual parts easier to test, maintain, and
+extend.
+
+### Phase 4 testing status
+
+Phase 4A, Phase 4B, and Phase 4C were developed incrementally with
+Test-Driven Development:
+
+1. Tests were written before each implementation.
+2. The new tests initially failed.
+3. The required GUI functionality was implemented.
+4. All existing and new tests were executed together.
+5. The complete test suite passed without regressions.
+
+Current result:
+
+```text
+106 passed
+```
+
+Phase 4D will extend the graphical interface and will be documented in this
+section after its implementation.
