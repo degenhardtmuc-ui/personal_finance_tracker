@@ -752,6 +752,8 @@ If the amount is not a valid number, no transaction is added and the status
 label displays a readable validation message. The application remains open and
 can continue to be used.
 
+
+
 #### Phase 4B TDD evidence
 
 The Phase 4B tests verify that all input widgets exist, valid transactions are
