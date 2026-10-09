@@ -44,6 +44,10 @@ from PySide6.QtWidgets import (
 
 from finance_tracker.account import add_transaction, create_account
 from finance_tracker.category import Category, TransactionType
+from finance_tracker.csv_storage import (
+    export_transactions,
+    import_transactions,
+)
 from finance_tracker.json_storage import load_account, save_account
 from finance_tracker.transaction import create_transaction
 
@@ -108,10 +112,12 @@ class MainWindow(QMainWindow):
 
         transaction_form = self._create_transaction_form()
         json_controls = self._create_json_controls()
+        csv_controls = self._create_csv_controls()
         self.transaction_table = self._create_transaction_table()
 
         transactions_layout.addLayout(transaction_form)
         transactions_layout.addLayout(json_controls)
+        transactions_layout.addLayout(csv_controls)
         transactions_layout.addWidget(self.transaction_table)
 
         self.tab_widget.addTab(
@@ -266,6 +272,45 @@ class MainWindow(QMainWindow):
         json_controls.addWidget(self.load_json_button)
 
         return json_controls
+        
+    def _create_csv_controls(self) -> QHBoxLayout:
+        """Create and return the CSV import and export controls.
+
+        The layout contains one button for importing transactions from a CSV
+        file and one button for exporting the current account transactions.
+
+        Object names allow automated GUI tests to find the buttons without
+        depending on their visual position.
+
+        Each button is connected to a separate handler method. Widget creation
+        therefore remains separate from the actual CSV file operations.
+
+        Returns:
+            A horizontal layout containing the Import CSV and Export CSV
+            buttons.
+        """
+        csv_controls = QHBoxLayout()
+
+        self.import_csv_button = QPushButton("Import CSV")
+        self.import_csv_button.setObjectName(
+            "import_csv_button",
+        )
+        self.import_csv_button.clicked.connect(
+            self._handle_import_csv,
+        )
+
+        self.export_csv_button = QPushButton("Export CSV")
+        self.export_csv_button.setObjectName(
+            "export_csv_button",
+        )
+        self.export_csv_button.clicked.connect(
+            self._handle_export_csv,
+        )
+
+        csv_controls.addWidget(self.import_csv_button)
+        csv_controls.addWidget(self.export_csv_button)
+
+        return csv_controls
     
     def _create_transaction_table(self) -> QTableWidget:
         """Create and configure the transaction table.
@@ -446,7 +491,90 @@ class MainWindow(QMainWindow):
         self.transaction_status_label.setText(
             "Account loaded successfully.",
         )
+    
+    def _handle_import_csv(self) -> None:
+        """Open a file dialog and import transactions from a CSV file.
 
+        The selected CSV file is processed by the existing storage function.
+        Valid rows are added directly to the current account while invalid rows
+        are collected by the CSV importer.
+
+        After the import, the transaction table is rebuilt so that newly
+        imported transactions become visible immediately.
+
+        Cancelling the dialog produces an empty path. In that situation, the
+        method returns without changing the current account.
+        """
+        selected_path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Import transactions from CSV",
+            "",
+            "CSV files (*.csv)",
+        )
+
+        if not selected_path:
+            return
+
+        try:
+            import_result = import_transactions(
+                self.account,
+                selected_path,
+            )
+        except (OSError, TypeError, ValueError) as error:
+            self.transaction_status_label.setText(
+                f"CSV file could not be imported: {error}",
+            )
+            return
+
+        self._refresh_transaction_table()
+
+        imported = import_result["imported"]
+        skipped = import_result["skipped"]
+
+        self.transaction_status_label.setText(
+            f"Imported {imported} transaction(s); "
+            f"skipped {skipped} row(s).",
+        )
+    
+    def _handle_export_csv(self) -> None:
+        """Open a file dialog and export the current account as CSV.
+
+        The user selects the destination through a native Qt save dialog. If
+        the filename does not end with ``.csv``, the extension is appended
+        automatically.
+
+        Cancelling the dialog performs no export operation. File-system errors
+        are displayed in the status label instead of terminating the
+        application.
+        """
+        selected_path, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Export transactions as CSV",
+            "transactions.csv",
+            "CSV files (*.csv)",
+        )
+
+        if not selected_path:
+            return
+
+        if not selected_path.lower().endswith(".csv"):
+            selected_path = f"{selected_path}.csv"
+
+        try:
+            export_transactions(
+                self.account,
+                selected_path,
+            )
+        except (OSError, TypeError, ValueError) as error:
+            self.transaction_status_label.setText(
+                f"CSV file could not be exported: {error}",
+            )
+            return
+
+        self.transaction_status_label.setText(
+            "CSV exported successfully.",
+        )
+    
     def _refresh_transaction_table(self) -> None:
         """Rebuild the transaction table from the current account.
 
