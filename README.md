@@ -752,7 +752,12 @@ If the amount is not a valid number, no transaction is added and the status
 label displays a readable validation message. The application remains open and
 can continue to be used.
 
+#### Transaction form preview
 
+The following screenshot shows the completed transaction form with a successfully
+added expense transaction:
+
+![Phase 4B transaction form](docs/phase_4b_transaction_form.png)
 
 #### Phase 4B TDD evidence
 
