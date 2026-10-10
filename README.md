@@ -670,7 +670,7 @@ Phase 4 is divided into several smaller TDD steps:
 - Phase 4A: main application window and transaction table
 - Phase 4B: transaction entry form
 - Phase 4C: JSON save and load controls
-- Phase 4D: additional graphical features
+- Phase 4D: CSV import and export controls
 
 ### Phase 4A: Main application window
 
@@ -768,6 +768,14 @@ amounts are rejected.
 
 ![Phase 4B TDD GREEN](docs/phase_4b_tdd_green.png)
 
+#### Transaction form preview
+
+The completed transaction form allows users to enter a description, amount,
+transaction type, category, date, and optional tags. A successful transaction
+is immediately shown in the table.
+
+![Phase 4B transaction form](docs/phase_4b_transaction_form.png)
+
 ### Phase 4C: JSON file controls
 
 Phase 4C connects the graphical user interface with the JSON storage functions
@@ -832,14 +840,99 @@ The Phase 4C tests verify:
 
 ![Phase 4C TDD GREEN](docs/phase_4c_tdd_green.png)
 
+### Phase 4D: CSV import and export controls
+
+Phase 4D connects the graphical user interface with the CSV storage functions
+implemented in Phase 3. The Transactions tab now provides two additional
+buttons:
+
+| Control | Purpose |
+| --- | --- |
+| `Import CSV` | Reads transactions from a selected CSV file and adds every valid row to the current account |
+| `Export CSV` | Writes the current transaction table to a selected CSV file and adds a summary row |
+
+The GUI reuses `import_transactions()` and `export_transactions()` from
+`finance_tracker/csv_storage.py`. CSV parsing and validation therefore remain
+inside the storage layer instead of being duplicated in the window class.
+
+#### Importing transactions
+
+When the user selects `Import CSV`, the application:
+
+1. Opens a native file-selection dialog.
+2. Restricts the selection to CSV files.
+3. Returns without changing the account if the dialog is cancelled.
+4. Calls `import_transactions()` with the current account and selected path.
+5. Adds every valid CSV row as a transaction dictionary.
+6. Collects invalid rows without stopping the remaining import.
+7. Rebuilds the transaction table from the updated account.
+8. Displays the imported and skipped row counts in the status label.
+
+The importer returns a result dictionary with three entries:
+
+| Entry | Meaning |
+| --- | --- |
+| `imported` | Number of successfully imported transactions |
+| `skipped` | Number of rows that could not be imported |
+| `errors` | Detailed error objects for the invalid rows |
+
+This design is fault tolerant: one malformed row does not prevent valid rows
+later in the file from being processed.
+
+#### Exporting transactions
+
+When the user selects `Export CSV`, the application:
+
+1. Opens a native save-file dialog.
+2. Reads the destination selected by the user.
+3. Returns without writing a file if the dialog is cancelled.
+4. Adds the `.csv` extension when it is missing.
+5. Calls `export_transactions()` with the current account and selected path.
+6. Writes a header, one row per transaction, and a final summary row.
+7. Displays a success message in the status label.
+
+Income values are exported as positive amounts and expense values as negative
+amounts. The summary row includes the account balance so that the exported file
+can also be inspected in spreadsheet software.
+
+#### Error handling
+
+File-system, conversion, and validation errors are caught by the GUI. Instead
+of terminating the application, the window displays a readable message in the
+status label. The current in-memory account remains available for further work.
+
+#### Phase 4D TDD evidence
+
+The Phase 4D tests were written before the CSV controls were implemented. The
+RED run proves that the new buttons and handlers did not yet exist.
+
+RED state:
+
+![Phase 4D TDD RED](docs/phase_4d_tdd_red.png)
+
+After the CSV controls and their handlers were implemented, the new tests and
+all tests from the earlier phases passed together.
+
+GREEN state:
+
+![Phase 4D TDD GREEN](docs/phase_4d_tdd_green.png)
+
+The seven Phase 4D tests verify:
+
+- the existence of the `Import CSV` button,
+- the existence of the `Export CSV` button,
+- importing valid CSV rows through the GUI,
+- refreshing the transaction table after an import,
+- displaying imported and skipped row counts,
+- exporting to the selected path,
+- safe cancellation of import and export dialogs.
+
 ### Phase 4 architecture
 
 The Phase 4 GUI is a presentation layer placed on top of the existing
-dictionary-based business logic.
-
-The `MainWindow` manages the visible widgets and the current account. It uses
-the existing transaction functions to create validated transactions and the
-existing JSON storage functions to save and restore account data.
+dictionary-based domain and storage logic. `MainWindow` manages the visible
+widgets and current account. It delegates validation to the transaction layer
+and file operations to the JSON and CSV storage layers.
 
 ```mermaid
 classDiagram
@@ -853,9 +946,12 @@ classDiagram
         +create_transactions_tab()
         +create_transaction_form()
         +create_json_controls()
+        +create_csv_controls()
         +handle_add_transaction()
         +handle_save_json()
         +handle_load_json()
+        +handle_import_csv()
+        +handle_export_csv()
         +refresh_transaction_table()
     }
 
@@ -887,17 +983,38 @@ classDiagram
         +account_from_dict()
     }
 
+    class CSVStorage {
+        +import_transactions()
+        +export_transactions()
+        +parse_csv_row()
+        +normalize_category()
+    }
+
     class QFileDialog {
         +getSaveFileName()
         +getOpenFileName()
+    }
+
+    class JSONFile {
+        <<file>>
+        +JSON account data
+    }
+
+    class CSVFile {
+        <<file>>
+        +CSV transaction rows
     }
 
     AccountData "1" o-- "0..*" TransactionData : contains
     MainWindow --> AccountData : manages
     MainWindow ..> TransactionFunctions : creates
     MainWindow ..> JSONStorage : saves and loads
+    MainWindow ..> CSVStorage : imports and exports
     MainWindow ..> QFileDialog : selects files
     JSONStorage ..> AccountData : serializes
+    JSONStorage ..> JSONFile : reads and writes
+    CSVStorage ..> AccountData : updates
+    CSVStorage ..> CSVFile : reads and writes
 ```
 
 ### Phase 4 UML explanation
@@ -908,43 +1025,55 @@ classDiagram
 - `AccountData` represents the current account dictionary.
 - `TransactionData` represents one transaction dictionary.
 - `TransactionFunctions` represents the existing transaction business logic.
-- `JSONStorage` represents the JSON conversion and storage functions.
+- `JSONStorage` represents JSON conversion, saving, and loading.
+- `CSVStorage` represents CSV import, export, parsing, and category normalization.
 - `QFileDialog` represents the native Qt file-selection dialogs.
+- `JSONFile` and `CSVFile` represent external files selected by the user.
 
 #### Relationships
 
-- `AccountData "1" o-- "0..*" TransactionData`
-  means that one account contains zero or multiple transaction dictionaries.
-- `MainWindow --> AccountData`
-  means that the main window manages the current account.
-- `MainWindow ..> TransactionFunctions`
-  means that the GUI uses the existing transaction functions to create and
-  validate transactions.
-- `MainWindow ..> JSONStorage`
-  means that the GUI uses the JSON storage layer to save and load accounts.
-- `MainWindow ..> QFileDialog`
-  means that the GUI uses Qt file dialogs to select JSON files.
-- `JSONStorage ..> AccountData`
-  means that the storage layer converts and serializes account data.
+- `AccountData "1" o-- "0..*" TransactionData` means that one account
+  contains zero or multiple transaction dictionaries.
+- `MainWindow --> AccountData` means that the main window manages the current
+  in-memory account.
+- `MainWindow ..> TransactionFunctions` means that the GUI delegates transaction
+  creation and validation to the existing domain layer.
+- `MainWindow ..> JSONStorage` means that the GUI delegates JSON save and load
+  operations to the JSON storage layer.
+- `MainWindow ..> CSVStorage` means that the GUI delegates CSV import and export
+  operations to the CSV storage layer.
+- `MainWindow ..> QFileDialog` means that Qt dialogs select source and destination
+  files.
+- `JSONStorage ..> JSONFile` and `CSVStorage ..> CSVFile` mean that the storage
+  functions read and write their corresponding file formats.
 
 #### Separation of responsibilities
 
-The application separates its responsibilities into different layers:
-
 | Layer | Responsibility |
 | --- | --- |
-| GUI layer | Displays widgets and processes user interaction |
+| GUI layer | Displays widgets, reads user input, selects files, refreshes the table, and reports results |
 | Domain layer | Creates and validates transaction and account dictionaries |
-| Storage layer | Converts, saves, and loads JSON data |
+| Storage layer | Converts, imports, exports, saves, and loads JSON and CSV data |
 | Test layer | Verifies domain, storage, and GUI behaviour |
 
 This separation avoids duplicating business rules inside the graphical user
 interface. It also makes the individual parts easier to test, maintain, and
 extend.
 
+### Running the graphical application
+
+From the project directory, start the application with:
+
+```bash
+uv run python main.py
+```
+
+The window can then be used to add transactions, save or load JSON accounts,
+and import or export CSV files.
+
 ### Phase 4 testing status
 
-Phase 4A, Phase 4B, and Phase 4C were developed incrementally with
+Phase 4A, Phase 4B, Phase 4C, and Phase 4D were developed incrementally with
 Test-Driven Development:
 
 1. Tests were written before each implementation.
@@ -953,11 +1082,12 @@ Test-Driven Development:
 4. All existing and new tests were executed together.
 5. The complete test suite passed without regressions.
 
-Current result:
+Final result after Phase 4D:
 
 ```text
-106 passed
+113 passed
 ```
 
-Phase 4D will extend the graphical interface and will be documented in this
-section after its implementation.
+Phase 4 is now complete. The graphical application supports transaction entry,
+table display, JSON persistence, and CSV data exchange while continuing to use
+the dictionary-based architecture from the earlier phases.
