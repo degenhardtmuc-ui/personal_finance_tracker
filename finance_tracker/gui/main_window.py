@@ -1,8 +1,8 @@
 """Provide the main PySide6 window for the Personal Finance Tracker.
 
 This module contains the graphical main window of the application. The window
-provides a tab-based user interface and currently includes the transactions
-tab.
+provides a tab-based user interface with transactions and dashboard tabs.
+The dashboard displays income, expenses, and the current account balance.
 
 The transactions tab contains two principal areas:
 
@@ -42,7 +42,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from finance_tracker.account import add_transaction, create_account
+from finance_tracker.account import (
+    add_transaction,
+    calculate_balance,
+    calculate_expense_total,
+    calculate_income_total,
+    create_account,
+)
+from finance_tracker.analysis import monthly_summary
 from finance_tracker.category import Category, TransactionType
 from finance_tracker.csv_storage import (
     export_transactions,
@@ -94,6 +101,93 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.tab_widget)
 
         self._create_transactions_tab()
+        self._create_dashboard_tab()
+        self._refresh_dashboard()
+
+    def _create_dashboard_tab(self) -> None:
+        """Create the dashboard totals and monthly summary table."""
+        dashboard_tab = QWidget()
+        dashboard_layout = QVBoxLayout(dashboard_tab)
+        totals_layout = QFormLayout()
+
+        self.income_total_label = QLabel("0.00")
+        self.income_total_label.setObjectName("income_total_label")
+
+        self.expense_total_label = QLabel("0.00")
+        self.expense_total_label.setObjectName("expense_total_label")
+
+        self.balance_label = QLabel("0.00")
+        self.balance_label.setObjectName("balance_label")
+
+        totals_layout.addRow("Income:", self.income_total_label)
+        totals_layout.addRow("Expenses:", self.expense_total_label)
+        totals_layout.addRow("Balance:", self.balance_label)
+
+        self.monthly_summary_table = self._create_monthly_summary_table()
+
+        dashboard_layout.addLayout(totals_layout)
+        dashboard_layout.addWidget(QLabel("Monthly summary"))
+        dashboard_layout.addWidget(self.monthly_summary_table)
+
+        self.tab_widget.addTab(dashboard_tab, "Dashboard")
+
+    def _refresh_dashboard(self) -> None:
+        """Update all dashboard totals from the current account."""
+        income = calculate_income_total(self.account)
+        expenses = calculate_expense_total(self.account)
+        balance = calculate_balance(self.account)
+
+        self.income_total_label.setText(f"{income:.2f}")
+        self.expense_total_label.setText(f"{expenses:.2f}")
+        self.balance_label.setText(f"{balance:.2f}")
+
+        self._refresh_monthly_summary_table()
+
+    def _create_monthly_summary_table(self) -> QTableWidget:
+        """Create a read-only table for monthly financial totals."""
+        table = QTableWidget()
+        table.setObjectName("monthly_summary_table")
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(
+            ["Month", "Income", "Expenses", "Balance"],
+        )
+        table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers,
+        )
+        table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows,
+        )
+        table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection,
+        )
+        table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch,
+        )
+
+        return table
+
+    def _refresh_monthly_summary_table(self) -> None:
+        """Rebuild the monthly summary table from the current account."""
+        summary = monthly_summary(self.account)
+        self.monthly_summary_table.setRowCount(0)
+
+        for month, totals in summary.items():
+            row = self.monthly_summary_table.rowCount()
+            self.monthly_summary_table.insertRow(row)
+
+            displayed_values = [
+                month,
+                f"{totals['income']:.2f}",
+                f"{totals['expenses']:.2f}",
+                f"{totals['net']:.2f}",
+            ]
+
+            for column, value in enumerate(displayed_values):
+                self.monthly_summary_table.setItem(
+                    row,
+                    column,
+                    QTableWidgetItem(value),
+                )
 
     def _create_transactions_tab(self) -> None:
         """Create the transactions tab and add it to the main window.
@@ -236,7 +330,7 @@ class MainWindow(QMainWindow):
         )
 
         return form_layout
-    
+
     def _create_json_controls(self) -> QHBoxLayout:
         """Create and return the JSON file control layout.
 
@@ -272,7 +366,7 @@ class MainWindow(QMainWindow):
         json_controls.addWidget(self.load_json_button)
 
         return json_controls
-        
+
     def _create_csv_controls(self) -> QHBoxLayout:
         """Create and return the CSV import and export controls.
 
@@ -311,7 +405,7 @@ class MainWindow(QMainWindow):
         csv_controls.addWidget(self.export_csv_button)
 
         return csv_controls
-    
+
     def _create_transaction_table(self) -> QTableWidget:
         """Create and configure the transaction table.
 
@@ -410,12 +504,13 @@ class MainWindow(QMainWindow):
         )
 
         self._append_transaction_to_table(transaction)
+        self._refresh_dashboard()
         self._clear_transaction_form()
 
         self.transaction_status_label.setText(
             "Transaction added successfully.",
         )
-    
+
     def _handle_save_json(self) -> None:
         """Open a file dialog and save the current account as JSON.
 
@@ -491,7 +586,7 @@ class MainWindow(QMainWindow):
         self.transaction_status_label.setText(
             "Account loaded successfully.",
         )
-    
+
     def _handle_import_csv(self) -> None:
         """Open a file dialog and import transactions from a CSV file.
 
@@ -535,7 +630,7 @@ class MainWindow(QMainWindow):
             f"Imported {imported} transaction(s); "
             f"skipped {skipped} row(s).",
         )
-    
+
     def _handle_export_csv(self) -> None:
         """Open a file dialog and export the current account as CSV.
 
@@ -574,7 +669,7 @@ class MainWindow(QMainWindow):
         self.transaction_status_label.setText(
             "CSV exported successfully.",
         )
-    
+
     def _refresh_transaction_table(self) -> None:
         """Rebuild the transaction table from the current account.
 
@@ -590,6 +685,8 @@ class MainWindow(QMainWindow):
 
         for transaction in self.account["transactions"]:
             self._append_transaction_to_table(transaction)
+
+        self._refresh_dashboard()
 
     @staticmethod
     def _parse_tags(tags_text: str) -> set[str]:
