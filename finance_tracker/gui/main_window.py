@@ -49,7 +49,14 @@ from finance_tracker.account import (
     calculate_income_total,
     create_account,
 )
-from finance_tracker.analysis import monthly_summary
+from finance_tracker.analysis import category_breakdown, monthly_summary
+from finance_tracker.budget import (
+    calculate_spent_amount,
+    create_budget_tracker,
+    is_exceeded,
+    remaining,
+    usage_percentage,
+)
 from finance_tracker.category import Category, TransactionType
 from finance_tracker.csv_storage import (
     export_transactions,
@@ -93,6 +100,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.account = create_account("Personal Finance")
+        self.budget_tracker = create_budget_tracker()
 
         self.setWindowTitle("Personal Finance Tracker")
         self.setMinimumSize(900, 600)
@@ -102,10 +110,84 @@ class MainWindow(QMainWindow):
 
         self._create_transactions_tab()
         self._create_dashboard_tab()
+        self._create_budgets_tab()
         self._refresh_dashboard()
 
+    def _create_budgets_tab(self) -> None:
+        """Create the Budgets tab and its overview table."""
+        budgets_tab = QWidget()
+        budgets_layout = QVBoxLayout(budgets_tab)
+
+        self.budget_table = self._create_budget_table()
+        budgets_layout.addWidget(self.budget_table)
+
+        self.tab_widget.addTab(budgets_tab, "Budgets")
+
+    def _create_budget_table(self) -> QTableWidget:
+        """Create a read-only table for budget limits and usage."""
+        table = QTableWidget()
+        table.setObjectName("budget_table")
+        table.setColumnCount(7)
+        table.setHorizontalHeaderLabels(
+            [
+                "Month",
+                "Category",
+                "Limit",
+                "Spent",
+                "Remaining",
+                "Usage",
+                "Status",
+            ],
+        )
+        table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers,
+        )
+        table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows,
+        )
+        table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection,
+        )
+        table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch,
+        )
+
+        return table
+
+    def _refresh_budget_table(self) -> None:
+        """Rebuild the budget overview using the current account."""
+        self.budget_table.setRowCount(0)
+
+        for budget in self.budget_tracker["budgets"]:
+            spent = calculate_spent_amount(budget, self.account)
+            remaining_amount = remaining(budget, self.account)
+            usage = usage_percentage(budget, self.account)
+            exceeded = is_exceeded(budget, self.account)
+
+            status = "Exceeded" if exceeded else "Within budget"
+
+            row = self.budget_table.rowCount()
+            self.budget_table.insertRow(row)
+
+            displayed_values = [
+                budget["month"],
+                budget["category"].value.title(),
+                f"{budget['monthly_limit']:.2f}",
+                f"{spent:.2f}",
+                f"{remaining_amount:.2f}",
+                f"{usage:.2f}%",
+                status,
+            ]
+
+            for column, value in enumerate(displayed_values):
+                self.budget_table.setItem(
+                    row,
+                    column,
+                    QTableWidgetItem(value),
+                )
+
     def _create_dashboard_tab(self) -> None:
-        """Create the dashboard totals and monthly summary table."""
+        """Create dashboard totals, monthly summaries, and category expenses."""
         dashboard_tab = QWidget()
         dashboard_layout = QVBoxLayout(dashboard_tab)
         totals_layout = QFormLayout()
@@ -124,10 +206,13 @@ class MainWindow(QMainWindow):
         totals_layout.addRow("Balance:", self.balance_label)
 
         self.monthly_summary_table = self._create_monthly_summary_table()
+        self.category_breakdown_table = self._create_category_breakdown_table()
 
         dashboard_layout.addLayout(totals_layout)
         dashboard_layout.addWidget(QLabel("Monthly summary"))
         dashboard_layout.addWidget(self.monthly_summary_table)
+        dashboard_layout.addWidget(QLabel("Expenses by category"))
+        dashboard_layout.addWidget(self.category_breakdown_table)
 
         self.tab_widget.addTab(dashboard_tab, "Dashboard")
 
@@ -142,6 +227,52 @@ class MainWindow(QMainWindow):
         self.balance_label.setText(f"{balance:.2f}")
 
         self._refresh_monthly_summary_table()
+        self._refresh_category_breakdown_table()
+        self._refresh_budget_table()
+
+    def _create_category_breakdown_table(self) -> QTableWidget:
+        """Create a read-only table for expense totals by category."""
+        table = QTableWidget()
+        table.setObjectName("category_breakdown_table")
+        table.setColumnCount(2)
+        table.setHorizontalHeaderLabels(
+            ["Category", "Expenses"],
+        )
+        table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers,
+        )
+        table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows,
+        )
+        table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection,
+        )
+        table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch,
+        )
+
+        return table
+
+    def _refresh_category_breakdown_table(self) -> None:
+        """Rebuild expense category rows from the current account."""
+        breakdown = category_breakdown(self.account)
+        self.category_breakdown_table.setRowCount(0)
+
+        for category, amount in breakdown.items():
+            row = self.category_breakdown_table.rowCount()
+            self.category_breakdown_table.insertRow(row)
+
+            displayed_values = [
+                category.value.title(),
+                f"{amount:.2f}",
+            ]
+
+            for column, value in enumerate(displayed_values):
+                self.category_breakdown_table.setItem(
+                    row,
+                    column,
+                    QTableWidgetItem(value),
+                )
 
     def _create_monthly_summary_table(self) -> QTableWidget:
         """Create a read-only table for monthly financial totals."""
