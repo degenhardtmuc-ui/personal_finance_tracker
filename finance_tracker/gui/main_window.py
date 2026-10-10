@@ -23,6 +23,8 @@ The GUI therefore acts as a presentation layer above the existing business
 logic.
 """
 
+from math import isfinite
+
 from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
     QComboBox,
@@ -55,6 +57,7 @@ from finance_tracker.budget import (
     create_budget_tracker,
     is_exceeded,
     remaining,
+    set_budget,
     usage_percentage,
 )
 from finance_tracker.category import Category, TransactionType
@@ -114,14 +117,92 @@ class MainWindow(QMainWindow):
         self._refresh_dashboard()
 
     def _create_budgets_tab(self) -> None:
-        """Create the Budgets tab and its overview table."""
+        """Create the budget form and overview table."""
         budgets_tab = QWidget()
         budgets_layout = QVBoxLayout(budgets_tab)
 
+        budget_form = self._create_budget_form()
         self.budget_table = self._create_budget_table()
+        budgets_layout.addLayout(budget_form)
         budgets_layout.addWidget(self.budget_table)
 
         self.tab_widget.addTab(budgets_tab, "Budgets")
+
+    def _create_budget_form(self) -> QFormLayout:
+        """Create the inputs for adding or updating a monthly budget."""
+        form_layout = QFormLayout()
+
+        self.budget_category_input = QComboBox()
+        self.budget_category_input.setObjectName("budget_category_input")
+        self.budget_category_input.addItems(
+            [category.value.title() for category in Category],
+        )
+
+        self.budget_limit_input = QLineEdit()
+        self.budget_limit_input.setObjectName("budget_limit_input")
+        self.budget_limit_input.setPlaceholderText("0.00")
+
+        self.budget_month_input = QDateEdit()
+        self.budget_month_input.setObjectName("budget_month_input")
+        self.budget_month_input.setDisplayFormat("yyyy-MM")
+        today = QDate.currentDate()
+        self.budget_month_input.setDate(
+            QDate(today.year(), today.month(), 1),
+        )
+
+        self.set_budget_button = QPushButton("Set budget")
+        self.set_budget_button.setObjectName("set_budget_button")
+        self.set_budget_button.clicked.connect(self._handle_set_budget)
+
+        self.budget_status_label = QLabel()
+        self.budget_status_label.setObjectName("budget_status_label")
+
+        form_layout.addRow("Category:", self.budget_category_input)
+        form_layout.addRow("Monthly limit:", self.budget_limit_input)
+        form_layout.addRow("Month:", self.budget_month_input)
+        form_layout.addRow(self.set_budget_button)
+        form_layout.addRow("Status:", self.budget_status_label)
+
+        return form_layout
+
+    def _handle_set_budget(self) -> None:
+        """Validate the form, set the budget, and refresh its overview."""
+        limit_text = self.budget_limit_input.text().strip()
+
+        try:
+            monthly_limit = float(limit_text)
+        except ValueError:
+            self.budget_status_label.setText(
+                "Monthly limit must be a valid number.",
+            )
+            return
+
+        if not isfinite(monthly_limit):
+            self.budget_status_label.setText(
+                "Monthly limit must be a valid number.",
+            )
+            return
+
+        category = Category(
+            self.budget_category_input.currentText().lower(),
+        )
+        month = self.budget_month_input.date().toString("yyyy-MM")
+
+        try:
+            set_budget(
+                self.budget_tracker,
+                category=category,
+                monthly_limit=monthly_limit,
+                month=month,
+            )
+        except ValueError as error:
+            self.budget_status_label.setText(str(error))
+            return
+
+        self._refresh_budget_table()
+        self.budget_status_label.setText(
+            "Budget saved for this session.",
+        )
 
     def _create_budget_table(self) -> QTableWidget:
         """Create a read-only table for budget limits and usage."""
