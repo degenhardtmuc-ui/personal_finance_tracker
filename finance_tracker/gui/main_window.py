@@ -65,7 +65,12 @@ from finance_tracker.csv_storage import (
     export_transactions,
     import_transactions,
 )
-from finance_tracker.json_storage import load_account, save_account
+from finance_tracker.json_storage import (
+    load_account,
+    load_budgets,
+    save_account,
+    save_budgets,
+)
 from finance_tracker.transaction import create_transaction
 
 
@@ -117,16 +122,80 @@ class MainWindow(QMainWindow):
         self._refresh_dashboard()
 
     def _create_budgets_tab(self) -> None:
-        """Create the budget form and overview table."""
+        """Create the budget form, file controls, and overview table."""
         budgets_tab = QWidget()
         budgets_layout = QVBoxLayout(budgets_tab)
 
         budget_form = self._create_budget_form()
+        budget_file_controls = self._create_budget_file_controls()
         self.budget_table = self._create_budget_table()
         budgets_layout.addLayout(budget_form)
+        budgets_layout.addLayout(budget_file_controls)
         budgets_layout.addWidget(self.budget_table)
 
         self.tab_widget.addTab(budgets_tab, "Budgets")
+
+    def _create_budget_file_controls(self) -> QHBoxLayout:
+        """Create the controls for saving and loading budget files."""
+        controls = QHBoxLayout()
+
+        self.save_budgets_button = QPushButton("Save budgets")
+        self.save_budgets_button.setObjectName("save_budgets_button")
+        self.save_budgets_button.clicked.connect(self._handle_save_budgets)
+
+        self.load_budgets_button = QPushButton("Load budgets")
+        self.load_budgets_button.setObjectName("load_budgets_button")
+        self.load_budgets_button.clicked.connect(self._handle_load_budgets)
+
+        controls.addWidget(self.save_budgets_button)
+        controls.addWidget(self.load_budgets_button)
+        return controls
+
+    def _handle_save_budgets(self) -> None:
+        """Ask for a destination and save the current budget tracker."""
+        selected_path, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Save budgets as JSON",
+            "budgets.json",
+            "JSON files (*.json)",
+        )
+        if not selected_path:
+            return
+        if not selected_path.lower().endswith(".json"):
+            selected_path = f"{selected_path}.json"
+
+        try:
+            save_budgets(self.budget_tracker, selected_path)
+        except (OSError, TypeError, ValueError) as error:
+            self.budget_status_label.setText(
+                f"Budgets could not be saved: {error}",
+            )
+            return
+
+        self.budget_status_label.setText("Budgets saved successfully.")
+
+    def _handle_load_budgets(self) -> None:
+        """Load a validated tracker and update the budget overview."""
+        selected_path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Load budgets from JSON",
+            "",
+            "JSON files (*.json)",
+        )
+        if not selected_path:
+            return
+
+        try:
+            loaded_tracker = load_budgets(selected_path)
+        except (OSError, TypeError, ValueError) as error:
+            self.budget_status_label.setText(
+                f"Budgets could not be loaded: {error}",
+            )
+            return
+
+        self.budget_tracker = loaded_tracker
+        self._refresh_budget_table()
+        self.budget_status_label.setText("Budgets loaded successfully.")
 
     def _create_budget_form(self) -> QFormLayout:
         """Create the inputs for adding or updating a monthly budget."""
