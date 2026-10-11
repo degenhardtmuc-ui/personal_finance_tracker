@@ -1,26 +1,8 @@
-"""Provide the main PySide6 window for the Personal Finance Tracker.
+"""Provide the main window for the Personal Finance Tracker.
 
-This module contains the graphical main window of the application. The window
-provides transactions, dashboard, and budgets tabs. Dashboard presentation
-is delegated to DashboardWidget; the current account remains owned here.
-
-The transactions tab contains two principal areas:
-
-1. A form for entering new transaction data.
-2. A table for displaying the transactions that were added.
-
-The graphical user interface does not create an alternative transaction data
-model. Instead, it uses the existing dictionary-based domain functions from
-the earlier project phases.
-
-This separation is important:
-
-- Qt widgets collect and display user input.
-- The transaction module validates and creates transaction dictionaries.
-- The account module stores the created transaction dictionaries.
-
-The GUI therefore acts as a presentation layer above the existing business
-logic.
+The main window owns the current account and budget tracker.
+DashboardWidget and BudgetWidget handle their respective interfaces.
+Transaction entry and file operations are coordinated here.
 """
 
 from math import isfinite
@@ -49,18 +31,15 @@ from finance_tracker.account import (
     create_account,
 )
 from finance_tracker.budget import (
-    calculate_spent_amount,
     create_budget_tracker,
-    is_exceeded,
-    remaining,
     set_budget,
-    usage_percentage,
 )
 from finance_tracker.category import Category, TransactionType
 from finance_tracker.csv_storage import (
     export_transactions,
     import_transactions,
 )
+from finance_tracker.gui.budget_widget import BudgetWidget
 from finance_tracker.gui.dashboard_widget import DashboardWidget
 from finance_tracker.json_storage import (
     load_account,
@@ -72,36 +51,10 @@ from finance_tracker.transaction import create_transaction
 
 
 class MainWindow(QMainWindow):
-    """Represent the main window of the Personal Finance Tracker.
-
-    The window contains a central tab widget. The first tab provides the
-    transaction management interface.
-
-    The class owns one dictionary-based account. New transactions created
-    through the form are validated by the domain layer, stored in the account,
-    and then displayed in the transaction table.
-
-    Attributes:
-        account: The dictionary-based account used by the GUI.
-        tab_widget: The central widget containing the application tabs.
-        transaction_table: The table displaying entered transactions.
-        description_input: The text field for the transaction description.
-        amount_input: The text field for the positive transaction amount.
-        transaction_type_input: The selection field for income or expense.
-        category_input: The selection field for the transaction category.
-        date_input: The date selector for the transaction date.
-        tags_input: The text field for optional comma-separated tags.
-        add_transaction_button: The button that submits the form.
-        transaction_status_label: The label displaying success or error text.
-    """
+    """Coordinate transaction entry, dashboards, budgets, and storage."""
 
     def __init__(self) -> None:
-        """Initialize the main application window and its widgets.
-
-        A fresh dictionary-based account is created for the current
-        application session. The window title and minimum size are configured
-        before the central tab widget is constructed.
-        """
+        """Create session data and initialize the application tabs."""
         super().__init__()
 
         self.account = create_account("Personal Finance")
@@ -119,34 +72,31 @@ class MainWindow(QMainWindow):
         self._refresh_dashboard()
 
     def _create_budgets_tab(self) -> None:
-        """Create the budget form, file controls, and overview table."""
-        budgets_tab = QWidget()
-        budgets_layout = QVBoxLayout(budgets_tab)
+        """Embed the budget widget and connect operation requests."""
+        self.budget_widget = BudgetWidget()
+        self.tab_widget.addTab(self.budget_widget, "Budgets")
 
-        budget_form = self._create_budget_form()
-        budget_file_controls = self._create_budget_file_controls()
-        self.budget_table = self._create_budget_table()
-        budgets_layout.addLayout(budget_form)
-        budgets_layout.addLayout(budget_file_controls)
-        budgets_layout.addWidget(self.budget_table)
+        # Preserve existing access paths to the same widget instances.
+        self.budget_category_input = (
+            self.budget_widget.budget_category_input
+        )
+        self.budget_limit_input = self.budget_widget.budget_limit_input
+        self.budget_month_input = self.budget_widget.budget_month_input
+        self.set_budget_button = self.budget_widget.set_budget_button
+        self.budget_status_label = self.budget_widget.budget_status_label
+        self.save_budgets_button = self.budget_widget.save_budgets_button
+        self.load_budgets_button = self.budget_widget.load_budgets_button
+        self.budget_table = self.budget_widget.budget_table
 
-        self.tab_widget.addTab(budgets_tab, "Budgets")
-
-    def _create_budget_file_controls(self) -> QHBoxLayout:
-        """Create the controls for saving and loading budget files."""
-        controls = QHBoxLayout()
-
-        self.save_budgets_button = QPushButton("Save budgets")
-        self.save_budgets_button.setObjectName("save_budgets_button")
-        self.save_budgets_button.clicked.connect(self._handle_save_budgets)
-
-        self.load_budgets_button = QPushButton("Load budgets")
-        self.load_budgets_button.setObjectName("load_budgets_button")
-        self.load_budgets_button.clicked.connect(self._handle_load_budgets)
-
-        controls.addWidget(self.save_budgets_button)
-        controls.addWidget(self.load_budgets_button)
-        return controls
+        self.budget_widget.set_budget_requested.connect(
+            self._handle_set_budget,
+        )
+        self.budget_widget.save_budgets_requested.connect(
+            self._handle_save_budgets,
+        )
+        self.budget_widget.load_budgets_requested.connect(
+            self._handle_load_budgets,
+        )
 
     def _handle_save_budgets(self) -> None:
         """Ask for a destination and save the current budget tracker."""
@@ -156,8 +106,10 @@ class MainWindow(QMainWindow):
             "budgets.json",
             "JSON files (*.json)",
         )
+
         if not selected_path:
             return
+
         if not selected_path.lower().endswith(".json"):
             selected_path = f"{selected_path}.json"
 
@@ -169,16 +121,19 @@ class MainWindow(QMainWindow):
             )
             return
 
-        self.budget_status_label.setText("Budgets saved successfully.")
+        self.budget_status_label.setText(
+            "Budgets saved successfully.",
+        )
 
     def _handle_load_budgets(self) -> None:
-        """Load a validated tracker and update the budget overview."""
+        """Load a validated tracker and refresh the budget overview."""
         selected_path, _selected_filter = QFileDialog.getOpenFileName(
             self,
             "Load budgets from JSON",
             "",
             "JSON files (*.json)",
         )
+
         if not selected_path:
             return
 
@@ -192,47 +147,12 @@ class MainWindow(QMainWindow):
 
         self.budget_tracker = loaded_tracker
         self._refresh_budget_table()
-        self.budget_status_label.setText("Budgets loaded successfully.")
-
-    def _create_budget_form(self) -> QFormLayout:
-        """Create the inputs for adding or updating a monthly budget."""
-        form_layout = QFormLayout()
-
-        self.budget_category_input = QComboBox()
-        self.budget_category_input.setObjectName("budget_category_input")
-        self.budget_category_input.addItems(
-            [category.value.title() for category in Category],
+        self.budget_status_label.setText(
+            "Budgets loaded successfully.",
         )
-
-        self.budget_limit_input = QLineEdit()
-        self.budget_limit_input.setObjectName("budget_limit_input")
-        self.budget_limit_input.setPlaceholderText("0.00")
-
-        self.budget_month_input = QDateEdit()
-        self.budget_month_input.setObjectName("budget_month_input")
-        self.budget_month_input.setDisplayFormat("yyyy-MM")
-        today = QDate.currentDate()
-        self.budget_month_input.setDate(
-            QDate(today.year(), today.month(), 1),
-        )
-
-        self.set_budget_button = QPushButton("Set budget")
-        self.set_budget_button.setObjectName("set_budget_button")
-        self.set_budget_button.clicked.connect(self._handle_set_budget)
-
-        self.budget_status_label = QLabel()
-        self.budget_status_label.setObjectName("budget_status_label")
-
-        form_layout.addRow("Category:", self.budget_category_input)
-        form_layout.addRow("Monthly limit:", self.budget_limit_input)
-        form_layout.addRow("Month:", self.budget_month_input)
-        form_layout.addRow(self.set_budget_button)
-        form_layout.addRow("Status:", self.budget_status_label)
-
-        return form_layout
 
     def _handle_set_budget(self) -> None:
-        """Validate the form, set the budget, and refresh its overview."""
+        """Validate the budget inputs and update the session tracker."""
         limit_text = self.budget_limit_input.text().strip()
 
         try:
@@ -270,98 +190,40 @@ class MainWindow(QMainWindow):
             "Budget saved for this session.",
         )
 
-    def _create_budget_table(self) -> QTableWidget:
-        """Create a read-only table for budget limits and usage."""
-        table = QTableWidget()
-        table.setObjectName("budget_table")
-        table.setColumnCount(7)
-        table.setHorizontalHeaderLabels(
-            [
-                "Month",
-                "Category",
-                "Limit",
-                "Spent",
-                "Remaining",
-                "Usage",
-                "Status",
-            ],
-        )
-        table.setEditTriggers(
-            QTableWidget.EditTrigger.NoEditTriggers,
-        )
-        table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows,
-        )
-        table.setSelectionMode(
-            QTableWidget.SelectionMode.SingleSelection,
-        )
-        table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch,
-        )
-
-        return table
-
     def _refresh_budget_table(self) -> None:
-        """Rebuild the budget overview using the current account."""
-        self.budget_table.setRowCount(0)
-
-        for budget in self.budget_tracker["budgets"]:
-            spent = calculate_spent_amount(budget, self.account)
-            remaining_amount = remaining(budget, self.account)
-            usage = usage_percentage(budget, self.account)
-            exceeded = is_exceeded(budget, self.account)
-
-            status = "Exceeded" if exceeded else "Within budget"
-
-            row = self.budget_table.rowCount()
-            self.budget_table.insertRow(row)
-
-            displayed_values = [
-                budget["month"],
-                budget["category"].value.title(),
-                f"{budget['monthly_limit']:.2f}",
-                f"{spent:.2f}",
-                f"{remaining_amount:.2f}",
-                f"{usage:.2f}%",
-                status,
-            ]
-
-            for column, value in enumerate(displayed_values):
-                self.budget_table.setItem(
-                    row,
-                    column,
-                    QTableWidgetItem(value),
-                )
+        """Refresh the budget interface from current session data."""
+        self.budget_widget.refresh(
+            self.budget_tracker,
+            self.account,
+        )
 
     def _create_dashboard_tab(self) -> None:
-        """Add the standalone dashboard and preserve existing widget access."""
+        """Embed the dashboard and preserve existing widget access."""
         self.dashboard_widget = DashboardWidget()
         self.tab_widget.addTab(self.dashboard_widget, "Dashboard")
 
-        # These aliases reference the same widgets, not additional copies.
-        self.income_total_label = self.dashboard_widget.income_total_label
-        self.expense_total_label = self.dashboard_widget.expense_total_label
+        # These aliases reference existing widgets without copying them.
+        self.income_total_label = (
+            self.dashboard_widget.income_total_label
+        )
+        self.expense_total_label = (
+            self.dashboard_widget.expense_total_label
+        )
         self.balance_label = self.dashboard_widget.balance_label
-        self.monthly_summary_table = self.dashboard_widget.monthly_summary_table
-        self.category_breakdown_table = self.dashboard_widget.category_breakdown_table
+        self.monthly_summary_table = (
+            self.dashboard_widget.monthly_summary_table
+        )
+        self.category_breakdown_table = (
+            self.dashboard_widget.category_breakdown_table
+        )
 
     def _refresh_dashboard(self) -> None:
-        """Refresh the dashboard and budgets from the current account."""
+        """Refresh the dashboard and budget usage from the account."""
         self.dashboard_widget.refresh(self.account)
         self._refresh_budget_table()
 
     def _create_transactions_tab(self) -> None:
-        """Create the transactions tab and add it to the main window.
-
-        The tab contains three principal areas:
-
-        1. A form for entering new transaction data.
-        2. JSON controls for saving and loading the current account.
-        3. A table for displaying the account transactions.
-
-        The form and file controls are placed above the transaction table so
-        that the user can manage the account from one central interface.
-        """
+        """Create transaction entry, storage controls, and the table."""
         transactions_tab = QWidget()
         transactions_layout = QVBoxLayout(transactions_tab)
 
@@ -381,15 +243,7 @@ class MainWindow(QMainWindow):
         )
 
     def _create_transaction_form(self) -> QFormLayout:
-        """Create and return the transaction input form.
-
-        Object names are assigned to all important widgets. These names allow
-        automated tests to find individual widgets without relying on their
-        visual position.
-
-        Returns:
-            A form layout containing all transaction input widgets.
-        """
+        """Create named input widgets for new transactions."""
         form_layout = QFormLayout()
 
         self.description_input = QLineEdit()
@@ -407,10 +261,7 @@ class MainWindow(QMainWindow):
             "transaction_type_input",
         )
         self.transaction_type_input.addItems(
-            [
-                "Income",
-                "Expense",
-            ],
+            ["Income", "Expense"],
         )
 
         self.category_input = QComboBox()
@@ -458,33 +309,16 @@ class MainWindow(QMainWindow):
             "transaction_status_label",
         )
 
-        form_layout.addRow(
-            "Description:",
-            self.description_input,
-        )
-        form_layout.addRow(
-            "Amount:",
-            self.amount_input,
-        )
+        form_layout.addRow("Description:", self.description_input)
+        form_layout.addRow("Amount:", self.amount_input)
         form_layout.addRow(
             "Transaction type:",
             self.transaction_type_input,
         )
-        form_layout.addRow(
-            "Category:",
-            self.category_input,
-        )
-        form_layout.addRow(
-            "Date:",
-            self.date_input,
-        )
-        form_layout.addRow(
-            "Tags:",
-            self.tags_input,
-        )
-        form_layout.addRow(
-            self.add_transaction_button,
-        )
+        form_layout.addRow("Category:", self.category_input)
+        form_layout.addRow("Date:", self.date_input)
+        form_layout.addRow("Tags:", self.tags_input)
+        form_layout.addRow(self.add_transaction_button)
         form_layout.addRow(
             "Status:",
             self.transaction_status_label,
@@ -493,22 +327,7 @@ class MainWindow(QMainWindow):
         return form_layout
 
     def _create_json_controls(self) -> QHBoxLayout:
-        """Create and return the JSON file control layout.
-
-        The layout contains one button for saving the current account and one
-        button for loading an account from a JSON file.
-
-        Object names are assigned to both buttons. Automated GUI tests use
-        these names to locate the widgets without depending on their visual
-        position.
-
-        The buttons are connected to separate handler methods. This keeps the
-        widget construction separate from the actual file operations.
-
-        Returns:
-            A horizontal layout containing the Save JSON and Load JSON
-            buttons.
-        """
+        """Create account saving and loading buttons."""
         json_controls = QHBoxLayout()
 
         self.save_json_button = QPushButton("Save JSON")
@@ -529,35 +348,17 @@ class MainWindow(QMainWindow):
         return json_controls
 
     def _create_csv_controls(self) -> QHBoxLayout:
-        """Create and return the CSV import and export controls.
-
-        The layout contains one button for importing transactions from a CSV
-        file and one button for exporting the current account transactions.
-
-        Object names allow automated GUI tests to find the buttons without
-        depending on their visual position.
-
-        Each button is connected to a separate handler method. Widget creation
-        therefore remains separate from the actual CSV file operations.
-
-        Returns:
-            A horizontal layout containing the Import CSV and Export CSV
-            buttons.
-        """
+        """Create transaction import and export buttons."""
         csv_controls = QHBoxLayout()
 
         self.import_csv_button = QPushButton("Import CSV")
-        self.import_csv_button.setObjectName(
-            "import_csv_button",
-        )
+        self.import_csv_button.setObjectName("import_csv_button")
         self.import_csv_button.clicked.connect(
             self._handle_import_csv,
         )
 
         self.export_csv_button = QPushButton("Export CSV")
-        self.export_csv_button.setObjectName(
-            "export_csv_button",
-        )
+        self.export_csv_button.setObjectName("export_csv_button")
         self.export_csv_button.clicked.connect(
             self._handle_export_csv,
         )
@@ -568,16 +369,7 @@ class MainWindow(QMainWindow):
         return csv_controls
 
     def _create_transaction_table(self) -> QTableWidget:
-        """Create and configure the transaction table.
-
-        The table contains one column for every value displayed by the
-        graphical interface. Users can select complete rows, but they cannot
-        directly edit table cells. Transactions must be changed through the
-        application logic instead of by modifying the visual representation.
-
-        Returns:
-            A configured table widget with six transaction columns.
-        """
+        """Create a read-only table with six transaction columns."""
         table = QTableWidget()
         table.setObjectName("transaction_table")
         table.setColumnCount(6)
@@ -591,7 +383,6 @@ class MainWindow(QMainWindow):
                 "Tags",
             ],
         )
-
         table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers,
         )
@@ -601,7 +392,6 @@ class MainWindow(QMainWindow):
         table.setSelectionMode(
             QTableWidget.SelectionMode.SingleSelection,
         )
-
         table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch,
         )
@@ -609,22 +399,7 @@ class MainWindow(QMainWindow):
         return table
 
     def _handle_add_transaction(self) -> None:
-        """Validate the form and add one transaction to the account.
-
-        The method performs the following operations:
-
-        1. Read the values from the Qt input widgets.
-        2. Convert the amount text into a floating-point number.
-        3. Convert visible combo-box text into domain enum values.
-        4. Convert comma-separated tag text into a Python set.
-        5. Ask the domain layer to create a validated dictionary.
-        6. Add the dictionary to the account.
-        7. Display the transaction in the table.
-        8. Clear the text fields after successful submission.
-
-        Invalid data does not crash the application. A readable message is
-        displayed in the status label instead.
-        """
+        """Validate input, store a transaction, and refresh the views."""
         description = self.description_input.text().strip()
         amount_text = self.amount_input.text().strip()
 
@@ -642,7 +417,6 @@ class MainWindow(QMainWindow):
         category = Category(
             self.category_input.currentText().lower(),
         )
-
         date = self.date_input.date().toString("yyyy-MM-dd")
         tags = self._parse_tags(self.tags_input.text())
 
@@ -659,11 +433,7 @@ class MainWindow(QMainWindow):
             self.transaction_status_label.setText(str(error))
             return
 
-        add_transaction(
-            self.account,
-            transaction,
-        )
-
+        add_transaction(self.account, transaction)
         self._append_transaction_to_table(transaction)
         self._refresh_dashboard()
         self._clear_transaction_form()
@@ -673,17 +443,7 @@ class MainWindow(QMainWindow):
         )
 
     def _handle_save_json(self) -> None:
-        """Open a file dialog and save the current account as JSON.
-
-        The user selects the destination with a native Qt file dialog. If no
-        file extension is entered, ``.json`` is appended automatically.
-
-        Cancelling the dialog produces an empty path. In this situation, the
-        method returns immediately and does not call the storage layer.
-
-        File-system and validation errors are caught so that an unsuccessful
-        save operation does not terminate the graphical application.
-        """
+        """Select a destination and save the current account."""
         selected_path, _selected_filter = QFileDialog.getSaveFileName(
             self,
             "Save account as JSON",
@@ -698,10 +458,7 @@ class MainWindow(QMainWindow):
             selected_path = f"{selected_path}.json"
 
         try:
-            save_account(
-                self.account,
-                selected_path,
-            )
+            save_account(self.account, selected_path)
         except (OSError, TypeError, ValueError) as error:
             self.transaction_status_label.setText(
                 f"Account could not be saved: {error}",
@@ -713,16 +470,7 @@ class MainWindow(QMainWindow):
         )
 
     def _handle_load_json(self) -> None:
-        """Open a file dialog and load an account from a JSON file.
-
-        After successful loading, the current in-memory account is replaced by
-        the loaded dictionary. The transaction table is then rebuilt from the
-        loaded transaction dictionaries.
-
-        Cancelling the dialog leaves the existing account unchanged. Storage,
-        conversion, and validation errors are displayed in the status label
-        instead of crashing the application.
-        """
+        """Load an account and rebuild all account-dependent views."""
         selected_path, _selected_filter = QFileDialog.getOpenFileName(
             self,
             "Load account from JSON",
@@ -743,24 +491,12 @@ class MainWindow(QMainWindow):
 
         self.account = loaded_account
         self._refresh_transaction_table()
-
         self.transaction_status_label.setText(
             "Account loaded successfully.",
         )
 
     def _handle_import_csv(self) -> None:
-        """Open a file dialog and import transactions from a CSV file.
-
-        The selected CSV file is processed by the existing storage function.
-        Valid rows are added directly to the current account while invalid rows
-        are collected by the CSV importer.
-
-        After the import, the transaction table is rebuilt so that newly
-        imported transactions become visible immediately.
-
-        Cancelling the dialog produces an empty path. In that situation, the
-        method returns without changing the current account.
-        """
+        """Import valid CSV rows and display the import result."""
         selected_path, _selected_filter = QFileDialog.getOpenFileName(
             self,
             "Import transactions from CSV",
@@ -793,16 +529,7 @@ class MainWindow(QMainWindow):
         )
 
     def _handle_export_csv(self) -> None:
-        """Open a file dialog and export the current account as CSV.
-
-        The user selects the destination through a native Qt save dialog. If
-        the filename does not end with ``.csv``, the extension is appended
-        automatically.
-
-        Cancelling the dialog performs no export operation. File-system errors
-        are displayed in the status label instead of terminating the
-        application.
-        """
+        """Select a destination and export account transactions."""
         selected_path, _selected_filter = QFileDialog.getSaveFileName(
             self,
             "Export transactions as CSV",
@@ -817,10 +544,7 @@ class MainWindow(QMainWindow):
             selected_path = f"{selected_path}.csv"
 
         try:
-            export_transactions(
-                self.account,
-                selected_path,
-            )
+            export_transactions(self.account, selected_path)
         except (OSError, TypeError, ValueError) as error:
             self.transaction_status_label.setText(
                 f"CSV file could not be exported: {error}",
@@ -832,16 +556,7 @@ class MainWindow(QMainWindow):
         )
 
     def _refresh_transaction_table(self) -> None:
-        """Rebuild the transaction table from the current account.
-
-        Existing visual table rows are removed before the account
-        transactions are inserted again. The account dictionary itself is not
-        changed by this method.
-
-        This separation is important because the table is only a visual
-        representation of the account data. The dictionary remains the actual
-        source of truth.
-        """
+        """Rebuild transaction rows and refresh dashboard and budgets."""
         self.transaction_table.setRowCount(0)
 
         for transaction in self.account["transactions"]:
@@ -851,22 +566,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _parse_tags(tags_text: str) -> set[str]:
-        """Convert comma-separated tag text into a cleaned set.
-
-        Leading and trailing spaces are removed from every tag. Empty entries
-        are ignored. A set prevents the same tag from being stored more than
-        once.
-
-        Example:
-            ``"food, weekly, food"`` becomes
-            ``{"food", "weekly"}``.
-
-        Args:
-            tags_text: The raw comma-separated text entered by the user.
-
-        Returns:
-            A set containing the cleaned non-empty tags.
-        """
+        """Convert comma-separated text into unique non-empty tags."""
         return {
             tag.strip()
             for tag in tags_text.split(",")
@@ -877,15 +577,7 @@ class MainWindow(QMainWindow):
         self,
         transaction: dict,
     ) -> None:
-        """Append one transaction dictionary to the visual table.
-
-        The function only controls the visual representation. The transaction
-        has already been validated and stored in the account before this
-        method is called.
-
-        Args:
-            transaction: The validated transaction dictionary to display.
-        """
+        """Append the display values of one validated transaction."""
         row = self.transaction_table.rowCount()
         self.transaction_table.insertRow(row)
 
@@ -903,19 +595,14 @@ class MainWindow(QMainWindow):
         ]
 
         for column, value in enumerate(displayed_values):
-            table_item = QTableWidgetItem(str(value))
             self.transaction_table.setItem(
                 row,
                 column,
-                table_item,
+                QTableWidgetItem(str(value)),
             )
 
     def _clear_transaction_form(self) -> None:
-        """Clear text fields after a transaction was added successfully.
-
-        The combo boxes and date selector remain unchanged. This is convenient
-        when users enter several similar transactions in succession.
-        """
+        """Clear text inputs after successfully adding a transaction."""
         self.description_input.clear()
         self.amount_input.clear()
         self.tags_input.clear()
