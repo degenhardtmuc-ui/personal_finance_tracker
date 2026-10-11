@@ -1719,3 +1719,238 @@ uv run pytest -v
 ```bash
 uv run python main.py
 ```
+## Phase 6B1 - Compact Transaction Layout
+
+### Goal
+
+Improve the layout of the Transactions tab by arranging inputs more compactly,
+grouping related buttons, and giving the transaction table more available space.
+
+Phase 6A separated the interface into individual widgets.
+Phase 6B now improves the arrangement of those widgets.
+
+The selected layout is **Compact at the top**:
+transaction inputs appear above the table in two groups of three columns.
+
+### Changes
+
+- Replaced the transaction form's `QFormLayout` with a `QGridLayout`.
+- Arranged six input fields in three columns.
+- Placed each label directly above its input field.
+- Added consistent outer margins and layout spacing.
+- Moved the submission button and status message into a separate row.
+- Grouped JSON and CSV controls in one horizontal toolbar.
+- Assigned additional vertical space to the transaction table.
+- Enabled word wrapping for longer status messages.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/transactions_widget.py` | Builds the compact form, grouped controls, and transaction table |
+| `tests/test_transactions_layout.py` | Tests input positions, spacing, and vertical space allocation |
+
+`MainWindow` continues to handle transaction validation, account management,
+and file operations through the existing request signals.
+
+### Form Arrangement
+
+The grid uses four rows: two label rows and two input rows.
+
+| Grid row | Column 0 | Column 1 | Column 2 |
+| --- | --- | --- | --- |
+| 0: Labels | Description | Amount | Transaction type |
+| 1: Inputs | Description input | Amount input | Type selection |
+| 2: Labels | Category | Date | Tags |
+| 3: Inputs | Category selection | Date input | Tags input |
+
+Compared with six fields arranged vertically, this structure reduces
+the height required by the input area and leaves more room for the table.
+
+### Grid Layout
+
+`QGridLayout` places widgets at explicit row and column positions.
+
+```python
+grid.addWidget(label, label_row, column)
+grid.addWidget(input_widget, label_row + 1, column)
+```
+
+The label is placed in its assigned row.
+The input field is placed one row below it, in the same column.
+
+A list of field definitions provides the label text, input widget,
+label row, and column. A loop creates the six label/input pairs.
+
+The grid receives the object name `transaction_form_grid`.
+This allows automated tests to find the layout without relying on
+its visual appearance.
+
+### Column Space Allocation
+
+Each column receives the same stretch factor:
+
+```python
+for column in range(3):
+    grid.setColumnStretch(column, 1)
+```
+
+This distributes additional horizontal space evenly between the columns,
+subject to the widgets' minimum sizes and size hints.
+
+Input fields use the following size policy:
+
+```python
+input_widget.setSizePolicy(
+    QSizePolicy.Policy.Expanding,
+    QSizePolicy.Policy.Fixed,
+)
+```
+
+The fields can expand horizontally while retaining their preferred height.
+
+### Margins and Spacing
+
+The layout uses explicitly defined spacing values.
+
+| Area | Setting | Value |
+| --- | --- | ---: |
+| Main layout | Left, top, right, and bottom margins | 20 |
+| Main layout | Spacing between sections | 16 |
+| Input grid | Additional outer margins | 0 |
+| Input grid | Horizontal spacing | 16 |
+| Input grid | Vertical spacing | 8 |
+| Submission row | Spacing between button and status | 12 |
+| File toolbar | Spacing between JSON and CSV groups | 24 |
+| File groups | Spacing within each group | 8 |
+
+These values are Qt layout units and follow the application's display scaling.
+
+The inner layouts use zero outer margins to avoid accumulating
+additional padding inside the main layout.
+
+### Submission and Status Row
+
+The Add transaction button and status label share a horizontal layout.
+
+```python
+controls.addWidget(self.add_transaction_button)
+controls.addWidget(self.transaction_status_label, 1)
+```
+
+The status label receives the available horizontal space beside the button.
+
+```python
+self.transaction_status_label.setWordWrap(True)
+```
+
+Longer success or validation messages can wrap onto multiple lines.
+The row can therefore grow vertically when required.
+
+### Grouped File Controls
+
+JSON and CSV operations are grouped separately within one toolbar.
+
+- **JSON:** Save JSON and Load JSON.
+- **CSV:** Import CSV and Export CSV.
+
+```python
+controls.addLayout(self._create_json_controls())
+controls.addLayout(self._create_csv_controls())
+controls.addStretch(1)
+```
+
+The stretch at the end absorbs unused horizontal space,
+keeping the button groups aligned to the left.
+
+The existing request signals remain connected to the handlers
+in `MainWindow`.
+
+### Table Space Allocation
+
+The transaction table receives a vertical stretch factor of `1`:
+
+```python
+layout.addWidget(self.transaction_table, 1)
+```
+
+The other sections have a stretch factor of `0`.
+
+When additional vertical space is available, the layout preferentially
+allocates it to the table. This allows more transaction rows to be visible
+when the window is enlarged.
+
+The stretch factor is a relative weight, not a fixed size or a percentage
+of the complete window.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added layout tests before changing the existing interface.
+   The tests failed because the compact grid, explicit spacing,
+   and table stretch factor were not yet implemented.
+2. **GREEN:** Implemented the compact layout in `TransactionsWidget`.
+3. **Verification:** All existing and new tests passed.
+
+### New Layout Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_transaction_inputs_use_compact_grid` | Checks all six input positions in the named grid |
+| `test_transaction_layout_has_consistent_spacing` | Checks outer margins and main/grid spacing |
+| `test_transaction_table_receives_extra_vertical_space` | Checks the table's stretch factor and the other sections' factors |
+
+The layout tests verify the agreed structural settings.
+A visual check additionally confirms how the interface behaves
+when the window is displayed and resized.
+
+**Complete test result: 160 passed.**
+
+### Test Evidence
+
+**RED - Before implementation**
+
+![Phase 6B1 TDD RED](docs/phase_6b1_tdd_red.png)
+
+**GREEN - All 160 tests passed**
+
+![Phase 6B1 TDD GREEN](docs/phase_6b1_tdd_green.png)
+
+### Transaction Interface after Layout Improvements
+
+![Phase 6B1 compact transaction layout](docs/phase_6b1_transactions_layout.png)
+
+### Verification Commands
+
+Run the new layout tests:
+
+```bash
+uv run pytest tests/test_transactions_layout.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+Start the application:
+
+```bash
+uv run python main.py
+```
+
+### Manual Interface Checks
+
+- Add a valid transaction.
+- Enter an invalid amount and inspect the status message.
+- Enlarge the window and confirm that the transaction table grows.
+- Check that the input fields and grouped file buttons remain readable.
+
+### Result
+
+Phase 6B1 provides a more compact transaction entry area,
+consistent spacing, and more available room for the transaction table.
+
+The next layout steps will improve the Budgets and Dashboard tabs.
+Colours, typography, and consistent status styling belong to Phase 6C.
+Financial charts belong to Phase 6D.
