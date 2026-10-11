@@ -1482,3 +1482,240 @@ and improves the cohesion of the GUI components.
 ### Dashboard after Refactoring
 
 ![Phase 6A1 – Dashboard](docs/phase_6a1_dashboard.png)
+
+## Phase 6A2 - Extract the Budget Widget
+
+### Goal
+
+Move the budget interface into a standalone `BudgetWidget` to make
+the main window easier to understand and maintain.
+
+### Changes
+
+- Added `finance_tracker/gui/budget_widget.py`.
+- Moved the budget form, file buttons, and overview table into `BudgetWidget`.
+- Updated `MainWindow` to embed the widget in the Budgets tab.
+- Preserved existing widget access through aliases referencing the same objects.
+
+### Responsibilities
+
+| Component | Responsibility |
+| --- | --- |
+| `BudgetWidget` | Creates the budget interface and displays budget usage |
+| `MainWindow` | Owns session data, handles requests, and coordinates storage |
+| Budget functions | Validate budgets and calculate spent, remaining, usage, and exceeded status |
+| JSON storage functions | Save and load budget data |
+
+### Qt Signals
+
+The widget emits three requests:
+
+- `set_budget_requested`
+- `save_budgets_requested`
+- `load_budgets_requested`
+
+`MainWindow` connects these signals to its existing handlers.
+
+The widget does not own an account or budget tracker.
+Its `refresh(budget_tracker, account)` method receives the current data
+and rebuilds the overview.
+
+The `usage_percentage` function is now imported by `budget_widget.py`.
+Its calculation remains part of the application.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added tests before the widget module existed.
+   Pytest reported `ModuleNotFoundError` during test collection.
+2. **GREEN:** Implemented `BudgetWidget` and integrated it into `MainWindow`.
+3. **Verification:** All existing and new tests passed.
+
+The four new tests cover:
+
+- The seven budget table columns.
+- Removal of outdated rows during refresh.
+- Button request signals.
+- Integration into the main window and shared widget references.
+
+**Result: 153 passed.**
+
+### Test Evidence
+
+**RED - Before implementation**
+
+![Phase 6A2 TDD RED](docs/phase_6a2_tdd_red.png)
+
+**GREEN - All 153 tests passed**
+
+![Phase 6A2 TDD GREEN](docs/phase_6a2_tdd_green.png)
+
+### Budget Interface after Refactoring
+
+![Phase 6A2 budget interface](docs/phase_6a2_budgets.png)
+
+
+## Phase 6A3 - Extract the Transactions Widget
+
+### Goal
+
+Move the transaction interface into a standalone `TransactionsWidget`
+to separate widget construction and table presentation from application
+coordination.
+
+### Changes
+
+- Added `finance_tracker/gui/transactions_widget.py`.
+- Moved the transaction form into the new widget.
+- Moved the JSON and CSV buttons into the new widget.
+- Moved transaction table construction and row rendering into the new widget.
+- Updated `MainWindow` to embed the widget in the Transactions tab.
+- Preserved existing widget access through aliases referencing the same objects.
+
+### Responsibilities
+
+| Component | Responsibility |
+| --- | --- |
+| `TransactionsWidget` | Creates inputs and buttons, displays transactions, and clears text fields |
+| `MainWindow` | Reads input, coordinates validation, manages the account, and performs file operations |
+| Transaction functions | Validate input and create transaction dictionaries |
+| Account functions | Store transactions in the account |
+| JSON and CSV storage functions | Save, load, import, and export data |
+
+### Widget Methods
+
+| Method | Purpose |
+| --- | --- |
+| `append_transaction(transaction)` | Displays one validated transaction |
+| `refresh(account)` | Replaces all displayed rows with the supplied account transactions |
+| `clear_form()` | Clears description, amount, and tags |
+
+### Qt Signals
+
+The widget emits five requests:
+
+- `add_transaction_requested`
+- `save_json_requested`
+- `load_json_requested`
+- `import_csv_requested`
+- `export_csv_requested`
+
+`MainWindow` connects these signals to its existing handlers.
+
+### Transaction Flow
+
+When a transaction is submitted:
+
+1. The widget emits `add_transaction_requested`.
+2. `MainWindow` reads the form values.
+3. The domain layer validates and creates the transaction dictionary.
+4. The transaction is added to the current account.
+5. `TransactionsWidget` displays the new row.
+6. Dashboard totals and budget usage are refreshed.
+7. Description, amount, and tags are cleared.
+
+Invalid input is reported in the status label.
+
+Loading JSON or importing CSV rebuilds the transaction table
+and refreshes the dashboard and budget overview.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added tests before the widget module existed.
+   Pytest reported `ModuleNotFoundError` during test collection.
+2. **GREEN:** Implemented `TransactionsWidget` and integrated it into `MainWindow`.
+3. **Verification:** All existing and new tests passed.
+
+The four new tests cover:
+
+- The six transaction table columns.
+- Removal of outdated rows during refresh.
+- All five button request signals.
+- Integration into the main window and shared widget references.
+
+**Result: 157 passed.**
+
+### Test Evidence
+
+**RED - Before implementation**
+
+![Phase 6A3 TDD RED](docs/phase_6a3_tdd_red.png)
+
+**GREEN - All 157 tests passed**
+
+![Phase 6A3 TDD GREEN](docs/phase_6a3_tdd_green.png)
+
+### Transaction Interface after Refactoring
+
+![Phase 6A3 transaction interface](docs/phase_6a3_transactions.png)
+
+### Phase 6A Component Relationships
+
+```mermaid
+classDiagram
+    direction TB
+
+    class MainWindow {
+        +dict account
+        +dict budget_tracker
+    }
+
+    class DashboardWidget {
+        +refresh(account)
+    }
+
+    class BudgetWidget {
+        +refresh(budget_tracker, account)
+        +set_budget_requested
+        +save_budgets_requested
+        +load_budgets_requested
+    }
+
+    class TransactionsWidget {
+        +refresh(account)
+        +append_transaction(transaction)
+        +clear_form()
+        +add_transaction_requested
+        +save_json_requested
+        +load_json_requested
+        +import_csv_requested
+        +export_csv_requested
+    }
+
+    MainWindow *-- DashboardWidget : embeds
+    MainWindow *-- BudgetWidget : embeds
+    MainWindow *-- TransactionsWidget : embeds
+```
+
+### Design Explanation
+
+Each widget groups the presentation of one application tab.
+
+Qt request signals connect user actions to coordination in `MainWindow`.
+The main window owns the current account and budget tracker.
+
+Existing widget aliases reference the same Qt objects.
+They do not create additional inputs or tables.
+
+This refactoring improves cohesion and supports the Single Responsibility
+Principle by separating tab presentation from application coordination.
+
+The dictionary-based domain model remains the source of truth.
+Tables display the current data.
+
+### Run the Component Tests
+
+```bash
+uv run pytest tests/test_budget_widget.py tests/test_transactions_widget.py -v
+```
+
+### Run All Tests
+
+```bash
+uv run pytest -v
+```
+
+### Start the Application
+
+```bash
+uv run python main.py
+```
