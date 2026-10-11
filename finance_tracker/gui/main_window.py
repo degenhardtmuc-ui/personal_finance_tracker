@@ -1,29 +1,16 @@
-"""Provide the main window for the Personal Finance Tracker.
+"""Coordinate the Personal Finance Tracker GUI and session data.
 
 The main window owns the current account and budget tracker.
-DashboardWidget and BudgetWidget handle their respective interfaces.
-Transaction entry and file operations are coordinated here.
+Separate widgets display transactions, dashboard summaries, and budgets.
+The main window validates submissions and performs file operations.
 """
 
 from math import isfinite
 
-from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
-    QComboBox,
-    QDateEdit,
     QFileDialog,
-    QFormLayout,
-    QHeaderView,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
     QMainWindow,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
     QTabWidget,
-    QVBoxLayout,
-    QWidget,
 )
 
 from finance_tracker.account import (
@@ -41,6 +28,7 @@ from finance_tracker.csv_storage import (
 )
 from finance_tracker.gui.budget_widget import BudgetWidget
 from finance_tracker.gui.dashboard_widget import DashboardWidget
+from finance_tracker.gui.transactions_widget import TransactionsWidget
 from finance_tracker.json_storage import (
     load_account,
     load_budgets,
@@ -51,10 +39,10 @@ from finance_tracker.transaction import create_transaction
 
 
 class MainWindow(QMainWindow):
-    """Coordinate transaction entry, dashboards, budgets, and storage."""
+    """Manage session data and coordinate the three GUI components."""
 
     def __init__(self) -> None:
-        """Create session data and initialize the application tabs."""
+        """Initialize account data, budget data, and application tabs."""
         super().__init__()
 
         self.account = create_account("Personal Finance")
@@ -71,138 +59,71 @@ class MainWindow(QMainWindow):
         self._create_budgets_tab()
         self._refresh_dashboard()
 
-    def _create_budgets_tab(self) -> None:
-        """Embed the budget widget and connect operation requests."""
-        self.budget_widget = BudgetWidget()
-        self.tab_widget.addTab(self.budget_widget, "Budgets")
+    def _create_transactions_tab(self) -> None:
+        """Embed transaction widgets and connect operation requests."""
+        self.transactions_widget = TransactionsWidget()
+        self.tab_widget.addTab(
+            self.transactions_widget,
+            "Transactions",
+        )
 
         # Preserve existing access paths to the same widget instances.
-        self.budget_category_input = (
-            self.budget_widget.budget_category_input
+        self.description_input = (
+            self.transactions_widget.description_input
         )
-        self.budget_limit_input = self.budget_widget.budget_limit_input
-        self.budget_month_input = self.budget_widget.budget_month_input
-        self.set_budget_button = self.budget_widget.set_budget_button
-        self.budget_status_label = self.budget_widget.budget_status_label
-        self.save_budgets_button = self.budget_widget.save_budgets_button
-        self.load_budgets_button = self.budget_widget.load_budgets_button
-        self.budget_table = self.budget_widget.budget_table
-
-        self.budget_widget.set_budget_requested.connect(
-            self._handle_set_budget,
+        self.amount_input = self.transactions_widget.amount_input
+        self.transaction_type_input = (
+            self.transactions_widget.transaction_type_input
         )
-        self.budget_widget.save_budgets_requested.connect(
-            self._handle_save_budgets,
+        self.category_input = self.transactions_widget.category_input
+        self.date_input = self.transactions_widget.date_input
+        self.tags_input = self.transactions_widget.tags_input
+        self.add_transaction_button = (
+            self.transactions_widget.add_transaction_button
         )
-        self.budget_widget.load_budgets_requested.connect(
-            self._handle_load_budgets,
+        self.transaction_status_label = (
+            self.transactions_widget.transaction_status_label
         )
-
-    def _handle_save_budgets(self) -> None:
-        """Ask for a destination and save the current budget tracker."""
-        selected_path, _selected_filter = QFileDialog.getSaveFileName(
-            self,
-            "Save budgets as JSON",
-            "budgets.json",
-            "JSON files (*.json)",
+        self.save_json_button = (
+            self.transactions_widget.save_json_button
         )
-
-        if not selected_path:
-            return
-
-        if not selected_path.lower().endswith(".json"):
-            selected_path = f"{selected_path}.json"
-
-        try:
-            save_budgets(self.budget_tracker, selected_path)
-        except (OSError, TypeError, ValueError) as error:
-            self.budget_status_label.setText(
-                f"Budgets could not be saved: {error}",
-            )
-            return
-
-        self.budget_status_label.setText(
-            "Budgets saved successfully.",
+        self.load_json_button = (
+            self.transactions_widget.load_json_button
+        )
+        self.import_csv_button = (
+            self.transactions_widget.import_csv_button
+        )
+        self.export_csv_button = (
+            self.transactions_widget.export_csv_button
+        )
+        self.transaction_table = (
+            self.transactions_widget.transaction_table
         )
 
-    def _handle_load_budgets(self) -> None:
-        """Load a validated tracker and refresh the budget overview."""
-        selected_path, _selected_filter = QFileDialog.getOpenFileName(
-            self,
-            "Load budgets from JSON",
-            "",
-            "JSON files (*.json)",
+        self.transactions_widget.add_transaction_requested.connect(
+            self._handle_add_transaction,
         )
-
-        if not selected_path:
-            return
-
-        try:
-            loaded_tracker = load_budgets(selected_path)
-        except (OSError, TypeError, ValueError) as error:
-            self.budget_status_label.setText(
-                f"Budgets could not be loaded: {error}",
-            )
-            return
-
-        self.budget_tracker = loaded_tracker
-        self._refresh_budget_table()
-        self.budget_status_label.setText(
-            "Budgets loaded successfully.",
+        self.transactions_widget.save_json_requested.connect(
+            self._handle_save_json,
         )
-
-    def _handle_set_budget(self) -> None:
-        """Validate the budget inputs and update the session tracker."""
-        limit_text = self.budget_limit_input.text().strip()
-
-        try:
-            monthly_limit = float(limit_text)
-        except ValueError:
-            self.budget_status_label.setText(
-                "Monthly limit must be a valid number.",
-            )
-            return
-
-        if not isfinite(monthly_limit):
-            self.budget_status_label.setText(
-                "Monthly limit must be a valid number.",
-            )
-            return
-
-        category = Category(
-            self.budget_category_input.currentText().lower(),
+        self.transactions_widget.load_json_requested.connect(
+            self._handle_load_json,
         )
-        month = self.budget_month_input.date().toString("yyyy-MM")
-
-        try:
-            set_budget(
-                self.budget_tracker,
-                category=category,
-                monthly_limit=monthly_limit,
-                month=month,
-            )
-        except ValueError as error:
-            self.budget_status_label.setText(str(error))
-            return
-
-        self._refresh_budget_table()
-        self.budget_status_label.setText(
-            "Budget saved for this session.",
+        self.transactions_widget.import_csv_requested.connect(
+            self._handle_import_csv,
         )
-
-    def _refresh_budget_table(self) -> None:
-        """Refresh the budget interface from current session data."""
-        self.budget_widget.refresh(
-            self.budget_tracker,
-            self.account,
+        self.transactions_widget.export_csv_requested.connect(
+            self._handle_export_csv,
         )
 
     def _create_dashboard_tab(self) -> None:
         """Embed the dashboard and preserve existing widget access."""
         self.dashboard_widget = DashboardWidget()
-        self.tab_widget.addTab(self.dashboard_widget, "Dashboard")
+        self.tab_widget.addTab(
+            self.dashboard_widget,
+            "Dashboard",
+        )
 
-        # These aliases reference existing widgets without copying them.
         self.income_total_label = (
             self.dashboard_widget.income_total_label
         )
@@ -217,189 +138,49 @@ class MainWindow(QMainWindow):
             self.dashboard_widget.category_breakdown_table
         )
 
-    def _refresh_dashboard(self) -> None:
-        """Refresh the dashboard and budget usage from the account."""
-        self.dashboard_widget.refresh(self.account)
-        self._refresh_budget_table()
-
-    def _create_transactions_tab(self) -> None:
-        """Create transaction entry, storage controls, and the table."""
-        transactions_tab = QWidget()
-        transactions_layout = QVBoxLayout(transactions_tab)
-
-        transaction_form = self._create_transaction_form()
-        json_controls = self._create_json_controls()
-        csv_controls = self._create_csv_controls()
-        self.transaction_table = self._create_transaction_table()
-
-        transactions_layout.addLayout(transaction_form)
-        transactions_layout.addLayout(json_controls)
-        transactions_layout.addLayout(csv_controls)
-        transactions_layout.addWidget(self.transaction_table)
-
+    def _create_budgets_tab(self) -> None:
+        """Embed the budget widget and connect operation requests."""
+        self.budget_widget = BudgetWidget()
         self.tab_widget.addTab(
-            transactions_tab,
-            "Transactions",
+            self.budget_widget,
+            "Budgets",
         )
 
-    def _create_transaction_form(self) -> QFormLayout:
-        """Create named input widgets for new transactions."""
-        form_layout = QFormLayout()
-
-        self.description_input = QLineEdit()
-        self.description_input.setObjectName("description_input")
-        self.description_input.setPlaceholderText(
-            "Transaction description",
+        self.budget_category_input = (
+            self.budget_widget.budget_category_input
         )
-
-        self.amount_input = QLineEdit()
-        self.amount_input.setObjectName("amount_input")
-        self.amount_input.setPlaceholderText("0.00")
-
-        self.transaction_type_input = QComboBox()
-        self.transaction_type_input.setObjectName(
-            "transaction_type_input",
+        self.budget_limit_input = (
+            self.budget_widget.budget_limit_input
         )
-        self.transaction_type_input.addItems(
-            ["Income", "Expense"],
+        self.budget_month_input = (
+            self.budget_widget.budget_month_input
         )
-
-        self.category_input = QComboBox()
-        self.category_input.setObjectName("category_input")
-        self.category_input.addItems(
-            [
-                "Housing",
-                "Food",
-                "Transport",
-                "Entertainment",
-                "Health",
-                "Education",
-                "Clothing",
-                "Salary",
-                "Freelance",
-                "Investment",
-                "Other",
-            ],
+        self.set_budget_button = (
+            self.budget_widget.set_budget_button
         )
-
-        self.date_input = QDateEdit()
-        self.date_input.setObjectName("date_input")
-        self.date_input.setDisplayFormat("yyyy-MM-dd")
-        self.date_input.setCalendarPopup(True)
-        self.date_input.setDate(QDate.currentDate())
-
-        self.tags_input = QLineEdit()
-        self.tags_input.setObjectName("tags_input")
-        self.tags_input.setPlaceholderText(
-            "food, weekly, essential",
+        self.budget_status_label = (
+            self.budget_widget.budget_status_label
         )
-
-        self.add_transaction_button = QPushButton(
-            "Add transaction",
+        self.save_budgets_button = (
+            self.budget_widget.save_budgets_button
         )
-        self.add_transaction_button.setObjectName(
-            "add_transaction_button",
+        self.load_budgets_button = (
+            self.budget_widget.load_budgets_button
         )
-        self.add_transaction_button.clicked.connect(
-            self._handle_add_transaction,
+        self.budget_table = self.budget_widget.budget_table
+
+        self.budget_widget.set_budget_requested.connect(
+            self._handle_set_budget,
         )
-
-        self.transaction_status_label = QLabel()
-        self.transaction_status_label.setObjectName(
-            "transaction_status_label",
+        self.budget_widget.save_budgets_requested.connect(
+            self._handle_save_budgets,
         )
-
-        form_layout.addRow("Description:", self.description_input)
-        form_layout.addRow("Amount:", self.amount_input)
-        form_layout.addRow(
-            "Transaction type:",
-            self.transaction_type_input,
+        self.budget_widget.load_budgets_requested.connect(
+            self._handle_load_budgets,
         )
-        form_layout.addRow("Category:", self.category_input)
-        form_layout.addRow("Date:", self.date_input)
-        form_layout.addRow("Tags:", self.tags_input)
-        form_layout.addRow(self.add_transaction_button)
-        form_layout.addRow(
-            "Status:",
-            self.transaction_status_label,
-        )
-
-        return form_layout
-
-    def _create_json_controls(self) -> QHBoxLayout:
-        """Create account saving and loading buttons."""
-        json_controls = QHBoxLayout()
-
-        self.save_json_button = QPushButton("Save JSON")
-        self.save_json_button.setObjectName("save_json_button")
-        self.save_json_button.clicked.connect(
-            self._handle_save_json,
-        )
-
-        self.load_json_button = QPushButton("Load JSON")
-        self.load_json_button.setObjectName("load_json_button")
-        self.load_json_button.clicked.connect(
-            self._handle_load_json,
-        )
-
-        json_controls.addWidget(self.save_json_button)
-        json_controls.addWidget(self.load_json_button)
-
-        return json_controls
-
-    def _create_csv_controls(self) -> QHBoxLayout:
-        """Create transaction import and export buttons."""
-        csv_controls = QHBoxLayout()
-
-        self.import_csv_button = QPushButton("Import CSV")
-        self.import_csv_button.setObjectName("import_csv_button")
-        self.import_csv_button.clicked.connect(
-            self._handle_import_csv,
-        )
-
-        self.export_csv_button = QPushButton("Export CSV")
-        self.export_csv_button.setObjectName("export_csv_button")
-        self.export_csv_button.clicked.connect(
-            self._handle_export_csv,
-        )
-
-        csv_controls.addWidget(self.import_csv_button)
-        csv_controls.addWidget(self.export_csv_button)
-
-        return csv_controls
-
-    def _create_transaction_table(self) -> QTableWidget:
-        """Create a read-only table with six transaction columns."""
-        table = QTableWidget()
-        table.setObjectName("transaction_table")
-        table.setColumnCount(6)
-        table.setHorizontalHeaderLabels(
-            [
-                "Date",
-                "Description",
-                "Type",
-                "Category",
-                "Amount",
-                "Tags",
-            ],
-        )
-        table.setEditTriggers(
-            QTableWidget.EditTrigger.NoEditTriggers,
-        )
-        table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows,
-        )
-        table.setSelectionMode(
-            QTableWidget.SelectionMode.SingleSelection,
-        )
-        table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch,
-        )
-
-        return table
 
     def _handle_add_transaction(self) -> None:
-        """Validate input, store a transaction, and refresh the views."""
+        """Validate input, store a transaction, and update all views."""
         description = self.description_input.text().strip()
         amount_text = self.amount_input.text().strip()
 
@@ -470,7 +251,7 @@ class MainWindow(QMainWindow):
         )
 
     def _handle_load_json(self) -> None:
-        """Load an account and rebuild all account-dependent views."""
+        """Load an account and refresh all account-dependent views."""
         selected_path, _selected_filter = QFileDialog.getOpenFileName(
             self,
             "Load account from JSON",
@@ -555,14 +336,125 @@ class MainWindow(QMainWindow):
             "CSV exported successfully.",
         )
 
+    def _handle_set_budget(self) -> None:
+        """Validate budget inputs and update the session tracker."""
+        limit_text = self.budget_limit_input.text().strip()
+
+        try:
+            monthly_limit = float(limit_text)
+        except ValueError:
+            self.budget_status_label.setText(
+                "Monthly limit must be a valid number.",
+            )
+            return
+
+        if not isfinite(monthly_limit):
+            self.budget_status_label.setText(
+                "Monthly limit must be a valid number.",
+            )
+            return
+
+        category = Category(
+            self.budget_category_input.currentText().lower(),
+        )
+        month = self.budget_month_input.date().toString("yyyy-MM")
+
+        try:
+            set_budget(
+                self.budget_tracker,
+                category=category,
+                monthly_limit=monthly_limit,
+                month=month,
+            )
+        except ValueError as error:
+            self.budget_status_label.setText(str(error))
+            return
+
+        self._refresh_budget_table()
+        self.budget_status_label.setText(
+            "Budget saved for this session.",
+        )
+
+    def _handle_save_budgets(self) -> None:
+        """Select a destination and save the budget tracker."""
+        selected_path, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Save budgets as JSON",
+            "budgets.json",
+            "JSON files (*.json)",
+        )
+
+        if not selected_path:
+            return
+
+        if not selected_path.lower().endswith(".json"):
+            selected_path = f"{selected_path}.json"
+
+        try:
+            save_budgets(self.budget_tracker, selected_path)
+        except (OSError, TypeError, ValueError) as error:
+            self.budget_status_label.setText(
+                f"Budgets could not be saved: {error}",
+            )
+            return
+
+        self.budget_status_label.setText(
+            "Budgets saved successfully.",
+        )
+
+    def _handle_load_budgets(self) -> None:
+        """Load a validated tracker and update the budget overview."""
+        selected_path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Load budgets from JSON",
+            "",
+            "JSON files (*.json)",
+        )
+
+        if not selected_path:
+            return
+
+        try:
+            loaded_tracker = load_budgets(selected_path)
+        except (OSError, TypeError, ValueError) as error:
+            self.budget_status_label.setText(
+                f"Budgets could not be loaded: {error}",
+            )
+            return
+
+        self.budget_tracker = loaded_tracker
+        self._refresh_budget_table()
+        self.budget_status_label.setText(
+            "Budgets loaded successfully.",
+        )
+
     def _refresh_transaction_table(self) -> None:
-        """Rebuild transaction rows and refresh dashboard and budgets."""
-        self.transaction_table.setRowCount(0)
-
-        for transaction in self.account["transactions"]:
-            self._append_transaction_to_table(transaction)
-
+        """Rebuild transaction rows and refresh summaries and budgets."""
+        self.transactions_widget.refresh(self.account)
         self._refresh_dashboard()
+
+    def _refresh_dashboard(self) -> None:
+        """Refresh dashboard totals and current budget usage."""
+        self.dashboard_widget.refresh(self.account)
+        self._refresh_budget_table()
+
+    def _refresh_budget_table(self) -> None:
+        """Refresh budget rows from current session data."""
+        self.budget_widget.refresh(
+            self.budget_tracker,
+            self.account,
+        )
+
+    def _append_transaction_to_table(
+        self,
+        transaction: dict,
+    ) -> None:
+        """Delegate transaction row rendering to the widget."""
+        self.transactions_widget.append_transaction(transaction)
+
+    def _clear_transaction_form(self) -> None:
+        """Delegate text input clearing to the transaction widget."""
+        self.transactions_widget.clear_form()
 
     @staticmethod
     def _parse_tags(tags_text: str) -> set[str]:
@@ -572,37 +464,3 @@ class MainWindow(QMainWindow):
             for tag in tags_text.split(",")
             if tag.strip()
         }
-
-    def _append_transaction_to_table(
-        self,
-        transaction: dict,
-    ) -> None:
-        """Append the display values of one validated transaction."""
-        row = self.transaction_table.rowCount()
-        self.transaction_table.insertRow(row)
-
-        formatted_tags = ", ".join(
-            sorted(transaction["tags"]),
-        )
-
-        displayed_values = [
-            transaction["date"],
-            transaction["description"],
-            transaction["transaction_type"].value.title(),
-            transaction["category"].value.title(),
-            f"{transaction['amount']:.2f}",
-            formatted_tags,
-        ]
-
-        for column, value in enumerate(displayed_values):
-            self.transaction_table.setItem(
-                row,
-                column,
-                QTableWidgetItem(str(value)),
-            )
-
-    def _clear_transaction_form(self) -> None:
-        """Clear text inputs after successfully adding a transaction."""
-        self.description_input.clear()
-        self.amount_input.clear()
-        self.tags_input.clear()
