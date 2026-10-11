@@ -1475,6 +1475,10 @@ and improves the cohesion of the GUI components.
 
 ![Phase 6A1 – TDD RED](docs/phase_6a1_tdd_red.png)
 
-**GREEN – After implementation**
+**GREEN – All 149 tests passed**
 
 ![Phase 6A1 – TDD GREEN](docs/phase_6a1_tdd_green.png)
+
+### Dashboard after Refactoring
+
+![Phase 6A1 – Dashboard](docs/phase_6a1_dashboard.png)
