@@ -1,6 +1,37 @@
 # Personal Finance Tracker
 
 The Personal Finance Tracker manages income and expense transactions.
+Its PySide6 desktop interface provides transaction entry, dashboard summaries,
+monthly budgets, JSON persistence, and CSV import/export.
+
+Current GitHub test suite: **138 passing tests**, verified on 11 October 2026.
+The complete Phase 5 learning workspace passed **144 tests**; two test files
+covering six additional cases have not yet been committed to this repository.
+Phase 6 will focus on GUI structure and layout.
+
+## Quick start
+
+From the project directory:
+
+```bash
+uv sync
+uv run python main.py
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+## Contents
+
+- [Phase 1: Core model](#phase-1-features)
+- [Phase 2: Analysis and budgets](#phase-2-features)
+- [Phase 3: JSON and CSV persistence](#phase-3---json-and-csv-persistence)
+- [Phase 4: PySide6 interface](#phase-4-pyside6-graphical-user-interface)
+- [Phase 5: Dashboard and budget integration](#phase-5-dashboard-and-budget-integration)
+
 
 ## Phase 1 features
 
@@ -15,14 +46,14 @@ The Personal Finance Tracker manages income and expense transactions.
 - Automated tests with pytest
 - Test-driven development
 
-## Run the tests
+## Phase 1 test baseline
 
 ```bash
 uv sync
 uv run pytest -v
 ```
 
-Expected result:
+Historical result after Phase 1:
 
 ```text
 33 passed
@@ -240,7 +271,7 @@ classDiagram
         <<dictionary>>
         +Category category
         +str month
-        +float limit
+        +float monthly_limit
     }
 
     class BudgetTrackerData {
@@ -270,7 +301,7 @@ classDiagram
 
 ---
 
-# Phase 3 – JSON and CSV persistence
+## Phase 3 - JSON and CSV persistence
 
 Phase 3 adds permanent file storage and data exchange to the Personal Finance
 Tracker.
@@ -279,9 +310,9 @@ The existing dictionary-based data model remains unchanged. Transactions and
 accounts can now be converted into JSON-compatible data, saved to files, loaded
 again, imported from CSV files, and exported to CSV files.
 
-## Phase 3 features
+### Phase 3 features
 
-### Phase 3A – JSON storage
+#### Phase 3A – JSON storage
 
 - Convert transaction dictionaries into JSON-compatible dictionaries
 - Restore Python transaction dictionaries from JSON data
@@ -292,7 +323,7 @@ again, imported from CSV files, and exported to CSV files.
 - Restore enums and sets after loading
 - Report missing or invalid files
 
-### Phase 3B – CSV storage
+#### Phase 3B – CSV storage
 
 - Import transactions from CSV files
 - Export transactions to CSV files
@@ -303,9 +334,9 @@ again, imported from CSV files, and exported to CSV files.
 - Continue importing after an invalid row
 - Collect invalid rows and their error messages
 - Add a summary row during export
-- Use custom storage and CSV exceptions
+- Use custom transaction and CSV row exceptions
 
-## New Phase 3 files
+### New Phase 3 files
 
 ```text
 finance_tracker/
@@ -318,17 +349,17 @@ tests/
 └── test_csv_storage.py
 ```
 
-### File responsibilities
+#### File responsibilities
 
 | File | Responsibility |
 | --- | --- |
 | `finance_tracker/json_storage.py` | Converts, saves, and loads JSON data |
 | `finance_tracker/csv_storage.py` | Imports and exports transaction CSV files |
-| `finance_tracker/exceptions.py` | Contains custom exceptions for storage errors |
+| `finance_tracker/exceptions.py` | Defines transaction, CSV row, and budget lookup exceptions |
 | `tests/test_json_storage.py` | Tests JSON conversion and file storage |
 | `tests/test_csv_storage.py` | Tests CSV import, export, and error handling |
 
-## JSON storage
+### JSON storage
 
 Python dictionaries can contain values that JSON cannot store directly.
 
@@ -347,7 +378,7 @@ Before saving, Phase 3 converts:
 
 When the file is loaded, these conversions are reversed.
 
-### JSON round trip
+#### JSON round trip
 
 A round trip means that data is:
 
@@ -364,7 +395,7 @@ flowchart LR
     D --> E["Restored Python dictionaries"]
 ```
 
-## CSV import
+### CSV import
 
 The CSV importer reads one row after another.
 
@@ -383,7 +414,7 @@ flowchart TB
     E -->|No| F["Return transactions and errors"]
 ```
 
-### Amount interpretation
+#### Amount interpretation
 
 | CSV amount | Transaction type | Stored amount |
 | ---: | --- | ---: |
@@ -394,7 +425,7 @@ flowchart TB
 The stored amount is always positive because the transaction type already
 describes whether the transaction is income or expense.
 
-## CSV export
+### CSV export
 
 The CSV exporter writes transaction dictionaries into a CSV file.
 
@@ -406,53 +437,53 @@ The exported file contains:
 
 The summary row provides an overview of the exported transactions.
 
-## Custom exceptions
+### Custom exceptions
 
-Phase 3 introduces custom exceptions so that storage errors can be distinguished
-from other Python errors.
+The existing exception module defines `InvalidTransactionError`, `CsvImportError`,
+and `BudgetNotFoundError`.
 
-Custom exceptions make it possible to:
+- `InvalidTransactionError` extends `ValueError` and reports invalid transaction
+  data, including invalid CSV fields and categories.
+- `CsvImportError` records the line number and reason for an invalid CSV row.
+  The importer collects these errors and continues processing later rows.
+- `BudgetNotFoundError` extends `LookupError` and is available for budget lookup
+  errors; the current budget file controls do not use it.
 
-- identify invalid JSON files,
-- identify missing files,
-- identify malformed CSV files,
-- present understandable error messages,
-- catch specific errors in a future Qt user interface.
+JSON operations currently use standard Python exceptions such as `OSError`,
+`ValueError`, and `json.JSONDecodeError`. The GUI reports handled file errors in
+status labels.
 
-A future GUI can catch these exceptions and display a `QMessageBox` instead of
-terminating the complete program.
-
-## Test-Driven Development
+### Test-Driven Development
 
 Phase 3 was implemented using Test-Driven Development.
 
-### RED
+#### RED
 
 The tests were written before the implementation. The new tests initially
 failed because the required functions were not implemented.
 
-#### Phase 3A JSON RED
+##### Phase 3A JSON RED
 
 ![Phase 3A TDD RED](docs/phase_3a_tdd_red.png)
 
-#### Phase 3B CSV RED
+##### Phase 3B CSV RED
 
 ![Phase 3B TDD RED](docs/phase_3b_tdd_red.png)
 
-### GREEN
+#### GREEN
 
 After the required functions were implemented, all existing and new tests
 passed.
 
-#### Phase 3A JSON GREEN
+##### Phase 3A JSON GREEN
 
 ![Phase 3A TDD GREEN](docs/phase_3a_tdd_green.png)
 
-#### Phase 3B CSV GREEN
+##### Phase 3B CSV GREEN
 
 ![Phase 3B TDD GREEN](docs/phase_3b_tdd_green.png)
 
-### Final Phase 3 test result
+#### Final Phase 3 test result
 
 ```text
 85 passed
@@ -461,7 +492,7 @@ passed.
 The result confirms that the new JSON and CSV features work and that the
 features from Phases 1 and 2 still work correctly.
 
-# Phase 3 UML diagram
+### Phase 3 UML diagram
 
 Phase 3 extends the application with JSON storage, CSV import, CSV export, and
 custom exceptions.
@@ -504,11 +535,12 @@ classDiagram
         +export_transactions()
     }
 
-    class StorageError {
+    class InvalidTransactionError {
         <<exception>>
+        <<ValueError subclass>>
     }
 
-    class CSVImportError {
+    class CsvImportError {
         <<exception>>
     }
 
@@ -527,21 +559,20 @@ classDiagram
     JSONStorageFunctions ..> AccountData : converts
     JSONStorageFunctions ..> TransactionData : converts
     JSONStorageFunctions ..> JSONFile : reads and writes
-    JSONStorageFunctions ..> StorageError : raises
 
     CSVStorageFunctions ..> TransactionData : imports and exports
     CSVStorageFunctions ..> CSVFile : reads and writes
-    CSVStorageFunctions ..> CSVImportError : raises
+    CSVStorageFunctions ..> InvalidTransactionError : catches
+    CSVStorageFunctions ..> CsvImportError : collects
 
-    StorageError <|-- CSVImportError
 ```
 
-## Phase 3 UML explanation
+### Phase 3 UML explanation
 
 The Phase 3 UML diagram shows how the existing dictionary-based domain model
 interacts with JSON and CSV files.
 
-### Existing data structures
+#### Existing data structures
 
 `AccountData` represents an account dictionary. It contains the account name and
 a list of transaction dictionaries.
@@ -551,7 +582,7 @@ description, amount, transaction type, category, date, and tags.
 
 One account can contain zero, one, or many transactions.
 
-### JSON storage functions
+#### JSON storage functions
 
 `JSONStorageFunctions` represents the functions from `json_storage.py`.
 
@@ -567,7 +598,7 @@ These functions:
 The relationship to `JSONFile` shows that the functions read and write JSON
 files.
 
-### CSV storage functions
+#### CSV storage functions
 
 `CSVStorageFunctions` represents the functions from `csv_storage.py`.
 
@@ -582,17 +613,16 @@ These functions:
 The relationship to `CSVFile` shows that the functions read and write CSV
 files.
 
-### Exceptions
+#### Exceptions
 
-`StorageError` represents a general error involving file storage.
+`InvalidTransactionError` is a `ValueError` subclass used for invalid CSV
+transaction data. `CsvImportError` records a CSV row error for collection by the
+importer. These two exceptions do not inherit from each other.
 
-`CSVImportError` represents an error involving CSV input. It is a specialized
-storage exception.
+JSON storage uses standard Python exceptions. A `StorageError` class is not
+part of the current implementation.
 
-Custom exceptions allow the application to handle file problems in a controlled
-and understandable way.
-
-## UML symbols
+### UML symbols
 
 | Symbol | Meaning |
 | --- | --- |
@@ -601,7 +631,6 @@ and understandable way.
 | `0..*` | Zero to any number of elements |
 | `o--` | Aggregation: one structure contains other structures |
 | `..>` | Dependency: a component uses another component |
-| `<\|--` | Inheritance: one exception specializes another exception |
 | `<<dictionary>>` | Data is represented by a Python dictionary |
 | `<<file>>` | Data is stored in an external file |
 | `<<exception>>` | The class represents a custom exception |
@@ -609,32 +638,36 @@ and understandable way.
 | `: converts` | Functions transform data between representations |
 | `: reads and writes` | Functions access an external file |
 | `: imports and exports` | Functions exchange transaction data with CSV |
-| `: raises` | A function can raise the specified exception |
+| `: catches` | A function handles the specified exception |
+| `: collects` | A function records errors for invalid rows |
 
-## Phase 3 relationships
+### Phase 3 relationships
 
-- `AccountData "1" o-- "0..*" TransactionData`  
+- `AccountData "1" o-- "0..*" TransactionData`
   One account contains zero to any number of transaction dictionaries.
 
-- `JSONStorageFunctions ..> AccountData`  
+- `JSONStorageFunctions ..> AccountData`
   The JSON functions convert complete account dictionaries.
 
-- `JSONStorageFunctions ..> TransactionData`  
+- `JSONStorageFunctions ..> TransactionData`
   The JSON functions convert individual transaction dictionaries.
 
-- `JSONStorageFunctions ..> JSONFile`  
+- `JSONStorageFunctions ..> JSONFile`
   The JSON functions read and write JSON files.
 
-- `CSVStorageFunctions ..> TransactionData`  
+- `CSVStorageFunctions ..> TransactionData`
   The CSV functions import and export transaction dictionaries.
 
-- `CSVStorageFunctions ..> CSVFile`  
+- `CSVStorageFunctions ..> CSVFile`
   The CSV functions read and write CSV files.
 
-- `StorageError <|-- CSVImportError`  
-  `CSVImportError` is a specialized form of `StorageError`.
+- `CSVStorageFunctions ..> InvalidTransactionError`
+  The importer handles invalid rows.
 
-## Phase 3 result
+- `CSVStorageFunctions ..> CsvImportError`
+  The importer collects each row error with its line number and reason.
+
+### Phase 3 result
 
 Phase 3 provides a complete persistence and data-exchange layer for the Personal
 Finance Tracker.
@@ -653,6 +686,7 @@ Phase 3 is complete with:
 ```text
 85 passed
 ```
+
 
 ## Phase 4: PySide6 graphical user interface
 
@@ -751,13 +785,6 @@ If the data is valid:
 If the amount is not a valid number, no transaction is added and the status
 label displays a readable validation message. The application remains open and
 can continue to be used.
-
-#### Transaction form preview
-
-The following screenshot shows the completed transaction form with a successfully
-added expense transaction:
-
-![Phase 4B transaction form](docs/phase_4b_transaction_form.png)
 
 #### Phase 4B TDD evidence
 
@@ -879,7 +906,7 @@ The importer returns a result dictionary with three entries:
 | --- | --- |
 | `imported` | Number of successfully imported transactions |
 | `skipped` | Number of rows that could not be imported |
-| `errors` | Detailed error objects for the invalid rows |
+| `errors` | Error objects containing line numbers and reasons for invalid rows |
 
 This design is fault tolerant: one malformed row does not prevent valid rows
 later in the file from being processed.
@@ -922,7 +949,7 @@ GREEN state:
 
 ![Phase 4D TDD GREEN](docs/phase_4d_tdd_green.png)
 
-The seven Phase 4D tests verify:
+The Phase 4D tests verify:
 
 - the existence of the `Import CSV` button,
 - the existence of the `Export CSV` button,
@@ -944,20 +971,20 @@ classDiagram
     direction TB
 
     class MainWindow {
-        -dict account
-        -QTabWidget tabs
-        -QTableWidget transaction_table
-        -QLabel transaction_status_label
-        +create_transactions_tab()
-        +create_transaction_form()
-        +create_json_controls()
-        +create_csv_controls()
-        +handle_add_transaction()
-        +handle_save_json()
-        +handle_load_json()
-        +handle_import_csv()
-        +handle_export_csv()
-        +refresh_transaction_table()
+        +dict account
+        +QTabWidget tab_widget
+        +QTableWidget transaction_table
+        +QLabel transaction_status_label
+        -_create_transactions_tab()
+        -_create_transaction_form()
+        -_create_json_controls()
+        -_create_csv_controls()
+        -_handle_add_transaction()
+        -_handle_save_json()
+        -_handle_load_json()
+        -_handle_import_csv()
+        -_handle_export_csv()
+        -_refresh_transaction_table()
     }
 
     class AccountData {
@@ -1096,3 +1123,293 @@ Final result after Phase 4D:
 Phase 4 is now complete. The graphical application supports transaction entry,
 table display, JSON persistence, and CSV data exchange while continuing to use
 the dictionary-based architecture from the earlier phases.
+
+
+---
+
+## Phase 5: Dashboard and budget integration
+
+Phase 5 adds financial summaries and connects the existing budget functions to
+the PySide6 interface. The application now has three tabs: `Transactions`,
+`Dashboard`, and `Budgets`.
+
+### Phase 5A: Dashboard totals
+
+The Dashboard tab displays total income, total expenses, and the account
+balance. Values are calculated from the current account and formatted with two
+decimal places.
+
+The GUI delegates the calculations to `calculate_income_total()`,
+`calculate_expense_total()`, and `calculate_balance()` from `account.py`.
+
+### Phase 5B: Monthly summary
+
+The monthly summary table displays `Month`, `Income`, `Expenses`, and `Balance`.
+It uses `monthly_summary()` from `analysis.py` to group transactions by month.
+The `net` value returned by this function is displayed in the Balance column.
+
+A newly created account has no monthly rows. Adding transactions, loading an
+account, or importing CSV transactions updates the summary.
+
+### Phase 5C: Expenses by category
+
+The category table displays `Category` and `Expenses`. It uses
+`category_breakdown()` from `analysis.py` and lists expense totals in descending
+order. Income transactions are excluded.
+
+This summary includes all months in the current account. Phase 5 does not add
+a dashboard month filter.
+
+### Phase 5D1: Budget overview
+
+The Budgets tab contains a read-only overview of the budgets in the current
+tracker.
+
+| Column | Meaning |
+| --- | --- |
+| Month | Budget month in `YYYY-MM` format |
+| Category | Category to which the limit applies |
+| Limit | Monthly budget limit |
+| Spent | Expenses matching the budget category and month |
+| Remaining | Limit minus matching expenses |
+| Usage | Matching expenses as a percentage of the limit |
+| Status | `Within budget` or `Exceeded` |
+
+The table uses `calculate_spent_amount()`, `remaining()`, `usage_percentage()`,
+and `is_exceeded()` from `budget.py`. Income does not count as budget spending.
+
+For example, a Food budget of `300.00` and matching expenses of `195.00` produces
+`105.00` remaining and `65.00%` usage. A budget is exceeded only when expenses
+are greater than its limit. Exactly `100.00%` is still `Within budget`.
+
+### Phase 5D2: Budget form
+
+The form provides a category selection, a monthly limit input, a month
+selection, a `Set budget` button, and a status label.
+
+To create or change a budget:
+
+1. Select a category.
+2. Enter a positive limit using a decimal point, for example `300.00`.
+3. Select the year and month.
+4. Select `Set budget`.
+
+The GUI calls `set_budget()` from the existing domain layer. The same category
+and month replace an existing budget; a different category or month adds a new
+budget. The overview refreshes immediately after successful submission.
+
+Empty input, non-numeric text, zero, negative values, and non-finite numbers
+are rejected. Invalid input leaves the existing budget unchanged. Successful
+submission keeps the form values available for further edits.
+
+`Budget saved for this session.` confirms an in-memory change. Use
+`Save budgets` to write these changes to a file.
+
+### Phase 5D3: Budget JSON files
+
+The Budgets tab provides two file controls:
+
+- `Save budgets` writes the current budget tracker to a JSON file and appends
+  `.json` when the filename has no JSON extension.
+- `Load budgets` validates a selected JSON file, replaces the budget tracker,
+  and refreshes the overview using the current account.
+
+Budget JSON conversion and file access are implemented in `json_storage.py`:
+
+| Function | Responsibility |
+| --- | --- |
+| `budget_tracker_to_dict()` | Converts category enums into JSON-compatible names and validates the data |
+| `budget_tracker_from_dict()` | Restores category enums and validates each budget through the domain layer |
+| `save_budgets()` | Writes a validated tracker as UTF-8 JSON |
+| `load_budgets()` | Reads JSON and returns a validated tracker |
+
+Example budget file:
+
+```json
+{
+    "budgets": [
+        {
+            "category": "FOOD",
+            "monthly_limit": 300.0,
+            "month": "2026-09"
+        }
+    ]
+}
+```
+
+The category is stored as an enum name such as `FOOD`, following the existing
+transaction JSON convention. Loading restores `Category.FOOD`.
+
+The loader checks the file structure, required fields, category names, numeric
+finite limits, and month strings. Existing domain validation checks positive
+limits and valid months. A new tracker is returned only after all entries have
+been processed successfully.
+
+Cancelling a file dialog leaves the current state unchanged. Loading errors
+are displayed in the budget status label and preserve the existing tracker.
+A valid empty budget list clears the overview. Loading replaces budgets rather
+than merging them; it does not replace the current account.
+
+### Saving and restoring a complete session
+
+Account transactions and budget limits use separate JSON files.
+
+| Data | Save control | Load control | Example filename |
+| --- | --- | --- | --- |
+| Account and transactions | `Save JSON` in Transactions | `Load JSON` in Transactions | `account.json` |
+| Budget limits | `Save budgets` in Budgets | `Load budgets` in Budgets | `budgets.json` |
+
+Save both files before closing the application. After a restart, load the
+account and budget files to restore the data and recalculate the summaries.
+There is no automatic save or automatic restore in Phase 5.
+
+### Refresh behaviour
+
+Adding a transaction, loading an account, and importing CSV transactions update
+the dashboard totals, monthly summary, category summary, and budget overview.
+Setting or loading budgets updates the budget overview immediately.
+
+Tables are rebuilt from the current data so repeated refreshes do not add
+duplicate rows. Summary tables are read-only; their values are calculated from
+the account and budget dictionaries.
+
+### Phase 5 architecture
+
+The following diagram focuses on the Phase 5 GUI dependencies. The domain model
+continues to use dictionaries. Boxes named after modules represent groups of
+functions, not additional Python classes.
+
+```mermaid
+classDiagram
+    direction TB
+
+    class MainWindow {
+        +dict account
+        +dict budget_tracker
+        -_refresh_dashboard()
+        -_refresh_budget_table()
+        -_handle_set_budget()
+        -_handle_save_budgets()
+        -_handle_load_budgets()
+    }
+
+    class AccountFunctions {
+        +calculate_income_total()
+        +calculate_expense_total()
+        +calculate_balance()
+    }
+
+    class AnalysisFunctions {
+        +monthly_summary()
+        +category_breakdown()
+    }
+
+    class BudgetFunctions {
+        +create_budget_tracker()
+        +set_budget()
+        +calculate_spent_amount()
+        +remaining()
+        +usage_percentage()
+        +is_exceeded()
+    }
+
+    class JSONStorageFunctions {
+        +budget_tracker_to_dict()
+        +budget_tracker_from_dict()
+        +save_budgets()
+        +load_budgets()
+    }
+
+    MainWindow ..> AccountFunctions : calculates totals
+    MainWindow ..> AnalysisFunctions : calculates summaries
+    MainWindow ..> BudgetFunctions : manages budgets
+    MainWindow ..> JSONStorageFunctions : saves and loads
+    JSONStorageFunctions ..> BudgetFunctions : validates loaded budgets
+```
+
+The GUI creates widgets, reads input, opens dialogs, and reports results. Domain
+functions calculate summaries and validate budgets. Storage functions convert
+and persist data. `..>` denotes a dependency; `-` denotes an internal method in
+this diagram.
+
+### Phase 5 test files
+
+| Test file | Coverage |
+| --- | --- |
+| `tests/test_dashboard.py` | Dashboard totals |
+| `tests/test_dashboard_monthly_summary.py` | Monthly summary columns and values |
+| `tests/test_dashboard_category_breakdown.py` | Expense category totals and ordering; not yet committed |
+| `tests/test_budget_overview.py` | Budgets tab, overview columns, and monthly values; not yet committed |
+| `tests/test_budget_form.py` | Creation, replacement, separate months, and invalid input |
+| `tests/test_budget_storage.py` | JSON format, round trips, empty trackers, and invalid files |
+| `tests/test_budget_file_controls.py` | GUI save/load, extension handling, cancellation, and failed loading |
+
+Each step used separate RED and GREEN stages. The complete Phase 5 learning
+workspace passed `144` tests. The current GitHub repository passes:
+
+```text
+138 passed
+```
+
+Verified on 11 October 2026 under Linux with Qt running offscreen. The six-test
+difference comes from `tests/test_dashboard_category_breakdown.py` and
+`tests/test_budget_overview.py`, which are not yet committed. Both contain three
+cases. The category summary and budget overview implementations are present.
+
+Run the complete test suite from the project directory:
+
+```bash
+uv run pytest -v
+```
+
+Run only the Phase 5D3 tests:
+
+```bash
+uv run pytest tests/test_budget_storage.py tests/test_budget_file_controls.py -v
+```
+
+Start the desktop application:
+
+```bash
+uv run python main.py
+```
+
+### Phase 5 TDD screenshots
+
+The links below point to screenshots currently committed to the repository.
+Missing evidence is marked explicitly to avoid broken links.
+
+| Step | RED evidence | GREEN evidence |
+| --- | --- | --- |
+| 5A: Dashboard totals | [RED](docs/phase_5a_tdd_red.png) | [GREEN](docs/phase_5a_tdd_green.png) |
+| 5B: Monthly summary | [RED](docs/phase_5b_tdd_red.png) | [GREEN](docs/phase_5b_tdd_green.png) |
+| 5C: Category expenses | Not yet committed | Not yet committed |
+| 5D1: Budget overview | Not yet committed | [GREEN](docs/phase_5d1_tdd_green.png) |
+| 5D2: Budget form | [RED](docs/phase_5d2_tdd_red.png) | [GREEN](docs/phase_5d2_tdd_green.png) |
+| 5D3: Budget files | [RED](docs/phase_5d3_tdd_red.png) | [GREEN](docs/phase_5d3_tdd_green.png) |
+
+### Phase 5 interface screenshots
+
+#### Dashboard totals
+
+![Dashboard totals](docs/phase_5a_dashboard.png)
+
+#### Monthly summary
+
+![Dashboard with monthly summary](docs/phase_5b_dashboard_monthly_summary.png)
+
+Category summary screenshot: not yet committed.
+
+- [Budget overview](docs/phase_5d1_budget_overview.png)
+- [Budget form](docs/phase_5d2_budget_form.png)
+
+#### Budget file controls
+
+![Budget overview with save and load controls](docs/phase_5d3_budget_file_controls.png)
+
+### Next phase
+
+Phase 6 will improve the GUI structure and visual layout. The current interface
+provides the functional baseline for reorganizing widgets and refining spacing,
+typography, colours, and table presentation while keeping the existing tests
+and domain behaviour intact.
