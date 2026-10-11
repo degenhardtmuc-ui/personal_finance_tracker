@@ -1160,6 +1160,19 @@ order. Income transactions are excluded.
 This summary includes all months in the current account. Phase 5 does not add
 a dashboard month filter.
 
+#### Phase 5C TDD evidence
+
+- [RED: category expense tests](docs/phase_5c_tdd_red.png)
+- [GREEN: category expense tests](docs/phase_5c_tdd_green.png)
+
+![Phase 5C RED test result](docs/phase_5c_tdd_red.png)
+
+![Phase 5C GREEN test result](docs/phase_5c_tdd_green.png)
+
+#### Phase 5C interface screenshot
+
+![Expenses by category](docs/phase_5c_dashboard_category_breakdown.png)
+
 ### Phase 5D1: Budget overview
 
 The Budgets tab contains a read-only overview of the budgets in the current
@@ -1181,6 +1194,19 @@ and `is_exceeded()` from `budget.py`. Income does not count as budget spending.
 For example, a Food budget of `300.00` and matching expenses of `195.00` produces
 `105.00` remaining and `65.00%` usage. A budget is exceeded only when expenses
 are greater than its limit. Exactly `100.00%` is still `Within budget`.
+
+#### Phase 5D1 TDD evidence
+
+- [RED: budget overview tests](docs/phase_5d1_tdd_red.png)
+- [GREEN: budget overview tests](docs/phase_5d1_tdd_green.png)
+
+![Phase 5D1 RED test result](docs/phase_5d1_tdd_red.png)
+
+![Phase 5D1 GREEN test result](docs/phase_5d1_tdd_green.png)
+
+#### Phase 5D1 interface screenshot
+
+![Budget overview](docs/phase_5d1_budget_overview.png)
 
 ### Phase 5D2: Budget form
 
@@ -1377,14 +1403,14 @@ uv run python main.py
 ### Phase 5 TDD screenshots
 
 The links below point to screenshots currently committed to the repository.
-Missing evidence is marked explicitly to avoid broken links.
+All RED and GREEN screenshots listed below are committed to the repository.
 
 | Step | RED evidence | GREEN evidence |
 | --- | --- | --- |
 | 5A: Dashboard totals | [RED](docs/phase_5a_tdd_red.png) | [GREEN](docs/phase_5a_tdd_green.png) |
 | 5B: Monthly summary | [RED](docs/phase_5b_tdd_red.png) | [GREEN](docs/phase_5b_tdd_green.png) |
-| 5C: Category expenses | Not yet committed | Not yet committed |
-| 5D1: Budget overview | Not yet committed | [GREEN](docs/phase_5d1_tdd_green.png) |
+| 5C: Category expenses | [RED](docs/phase_5c_tdd_red.png) | [GREEN](docs/phase_5c_tdd_green.png) |
+| 5D1: Budget overview | [RED](docs/phase_5d1_tdd_red.png) | [GREEN](docs/phase_5d1_tdd_green.png) |
 | 5D2: Budget form | [RED](docs/phase_5d2_tdd_red.png) | [GREEN](docs/phase_5d2_tdd_green.png) |
 | 5D3: Budget files | [RED](docs/phase_5d3_tdd_red.png) | [GREEN](docs/phase_5d3_tdd_green.png) |
 
@@ -1398,7 +1424,7 @@ Missing evidence is marked explicitly to avoid broken links.
 
 ![Dashboard with monthly summary](docs/phase_5b_dashboard_monthly_summary.png)
 
-Category summary screenshot: not yet committed.
+[Category summary](docs/phase_5c_dashboard_category_breakdown.png) — displayed in Phase 5C above.
 
 - [Budget overview](docs/phase_5d1_budget_overview.png)
 - [Budget form](docs/phase_5d2_budget_form.png)
