@@ -1439,3 +1439,42 @@ Phase 6 will improve the GUI structure and visual layout. The current interface
 provides the functional baseline for reorganizing widgets and refining spacing,
 typography, colours, and table presentation while keeping the existing tests
 and domain behaviour intact.
+## Phase 6A1 – Extract the Dashboard Widget
+
+### Goal
+
+Move the dashboard interface into a separate `DashboardWidget` component
+to make the main window easier to understand and maintain.
+
+### Changes
+
+- Added `finance_tracker/gui/dashboard_widget.py`.
+- Extracted the dashboard interface into `DashboardWidget`.
+- Updated `finance_tracker/gui/main_window.py` to use the new component.
+- Preserved the existing dashboard functionality.
+
+### Design
+
+The main window integrates the application's components.
+The dashboard widget manages the dashboard interface.
+
+This separation supports the Single Responsibility Principle (SRP)
+and improves the cohesion of the GUI components.
+
+### TDD – RED → GREEN
+
+1. **RED:** Added tests for the standalone dashboard widget before implementation.
+2. **GREEN:** Implemented the widget and integrated it into the main window.
+3. **Verification:** The complete test suite passed.
+
+**Result: 149 passed.**
+
+### Test Evidence
+
+**RED – Before implementation**
+
+![Phase 6A1 – TDD RED](docs/phase_6a1_tdd_red.png)
+
+**GREEN – After implementation**
+
+![Phase 6A1 – TDD GREEN](docs/phase_6a1_tdd_green.png)
