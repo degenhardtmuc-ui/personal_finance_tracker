@@ -4803,3 +4803,127 @@ Transactions can be narrowed by description, month, and category together.
 
 Filtering preserves account data and correct editing/deletion mapping.
 The financial views continue to represent the complete account.
+## Phase 7D - Integrated Workflow Verification
+
+### Goal
+
+Verify that transaction editing, deletion, search, filters,
+and JSON persistence work together correctly.
+
+This step checks complete workflows across the features introduced
+in Phase 7 rather than adding another interface feature.
+
+### New Test File
+
+| File | Responsibility |
+| --- | --- |
+| `tests/test_phase7_workflows.py` | Verifies combined filtering, editing, deletion, and account loading/saving |
+
+### Integrated Workflows
+
+#### Filtered editing and persistence
+
+A transaction is edited while the table displays only one month.
+
+Saving the account must preserve:
+
+- The edited transaction.
+- Transactions hidden by the filter.
+- The complete account data.
+
+The test loads the saved JSON file and checks both entries.
+
+#### Deleting the final transaction of a selected month
+
+After deleting the only entry in the selected month:
+
+- The obsolete month option is removed.
+- The month filter returns to All months.
+- Remaining transactions are displayed.
+- Selecting and editing a remaining row uses the correct account index.
+
+#### Loading an account during editing
+
+A replacement account is loaded while unsaved form edits exist.
+
+The application must:
+
+- Discard the unsaved form edit.
+- End editing mode.
+- Preserve the description query.
+- Rebuild visible-row mapping for the loaded account.
+- Allow correct editing of the newly loaded transaction.
+
+### Test Tools
+
+`tmp_path` provides temporary locations for JSON test files.
+
+`monkeypatch` replaces file dialogs and confirmation dialogs
+with automatic test answers.
+
+The original functions are restored after each test.
+
+### Verification Commands
+
+Run the integrated workflow tests:
+
+```bash
+uv run pytest tests/test_phase7_workflows.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+**Final Phase 7 result: 208 passed.**
+
+### Test Evidence
+
+![Phase 7D complete test suite](docs/phase_7d_tdd_green.png)
+
+### Phase 7 Summary
+
+| Step | Completed functionality |
+| --- | --- |
+| 7A | Edit existing transactions with shared validation |
+| 7B | Delete selected transactions after confirmation |
+| 7C1 | Search descriptions with safe original-entry mapping |
+| 7C2 | Combine description, month, and category filters |
+| 7D | Verify integrated editing, filtering, and persistence workflows |
+
+### Data and Presentation
+
+The account dictionary remains the source of truth.
+
+Filters change the displayed transaction rows.
+Dashboard totals, budget calculations, charts, and exports
+continue to use the complete account.
+
+Visible rows are mapped explicitly to original account entries.
+
+### Persistence
+
+Editing and deletion update the current session.
+
+Save JSON persists the complete updated account.
+CSV export also includes the complete stored transaction list.
+
+Unsaved form edits are not included in either operation.
+
+### Current Limitations
+
+- Undo and redo are not implemented.
+- Table sorting remains disabled.
+- Changing filters or selecting another transaction can discard
+  unsaved form edits.
+- Account changes are not automatically saved to a file.
+
+### Result
+
+Phase 7 provides transaction correction, confirmed deletion,
+description search, and combined filters.
+
+The integrated tests cover interactions between these features
+and JSON persistence.
