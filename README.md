@@ -4351,3 +4351,177 @@ Cancellation preserves the current data and editing state.
 Confirmed deletion updates all dependent financial views.
 
 Phase 7C will introduce transaction filtering and search.
+## Phase 7C1 - Transaction Description Search
+
+### Goal
+
+Find transactions by description while preserving correct editing
+and deletion behaviour in the filtered table.
+
+### Changes
+
+- Added a Search description field above the transaction table.
+- Added live, case-insensitive substring matching.
+- Ignored leading and trailing spaces in the query.
+- Restored all rows when the search is cleared.
+- Added explicit mapping between visible rows and stored transactions.
+- Preserved full-account financial summaries and exports.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/transactions_widget.py` | Creates the search field, filters rows, and stores their original indices |
+| `finance_tracker/gui/main_window.py` | Handles query changes and resolves selected rows to stored transactions |
+| `tests/test_transaction_search.py` | Tests search, clearing, editing, deletion, and edit-state reset |
+
+### Search Behaviour
+
+```python
+query = self.search_input.text().strip().casefold()
+```
+
+`strip` removes outer whitespace.
+`casefold` prepares text for case-insensitive comparison.
+
+```python
+if query and query not in description:
+    continue
+```
+
+Only descriptions containing the query are displayed.
+
+This is literal substring matching, not regular-expression search.
+
+An empty query displays every transaction.
+No matches produce an empty table without deleting account data.
+
+### Live Updates
+
+The search field emits its text changes through `search_changed`.
+
+`MainWindow` rebuilds the visible rows when the query changes.
+No separate Search button is required.
+
+The field's clear button restores the complete table.
+
+### Visible Row Mapping
+
+Filtering changes the relationship between table rows
+and account-list positions.
+
+For example, visible row `0` may represent account entry `1`.
+
+```python
+self.visible_transaction_indices.append(index)
+```
+
+The widget stores each visible row's original account index.
+
+```python
+index = self.transactions_widget.account_index_for_row(row)
+```
+
+The selection handler resolves the displayed row before editing or deleting.
+
+The mapping is rebuilt whenever the table is refreshed.
+Sorting remains disabled.
+
+### Editing and Deletion
+
+Filtered rows can be edited and deleted through the existing controls.
+
+Operations affect the mapped account entry rather than
+the visible row number.
+
+After editing, the current search is reapplied.
+A description that no longer matches may disappear from the table.
+
+After deletion, remaining row mappings are rebuilt.
+
+### Search Changes during Editing
+
+Changing the query ends an active editing session
+and discards its unsaved form input.
+
+Stored account data remains unchanged.
+
+The selection is cleared and the entry-mode buttons are restored.
+
+### Financial Views and Persistence
+
+Search filters only the transaction table.
+
+The following continue to use the complete account:
+
+- Dashboard totals and summary tables.
+- Budget calculations.
+- All charts.
+- JSON saving.
+- CSV export.
+
+Loading JSON or importing CSV reapplies the current search
+to the updated account.
+
+A newly added transaction may be hidden if it does not match
+the active query.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added tests before the search field and mapping existed.
+2. **GREEN:** Implemented live search and original-index mapping.
+3. **Verification:** Run the new tests and complete suite.
+
+Expected complete test count after five new cases: **200**.
+
+### New Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_search_matches_description_case_insensitively` | Checks matching, whitespace handling, and unchanged account totals |
+| `test_clearing_search_restores_all_rows` | Checks unmatched queries and restoring all rows |
+| `test_editing_filtered_row_updates_correct_transaction` | Checks correct original-entry replacement |
+| `test_deleting_filtered_row_removes_correct_transaction` | Checks correct original-entry deletion |
+| `test_changing_search_ends_active_edit` | Checks discarded form edits and restored controls |
+
+### Test Evidence
+
+**RED**
+
+![Phase 7C1 TDD RED](docs/phase_7c1_tdd_red.png)
+
+**GREEN**
+
+![Phase 7C1 TDD GREEN](docs/phase_7c1_tdd_green.png)
+
+### Search Interface
+
+![Phase 7C1 transaction search](docs/phase_7c1_transaction_search.png)
+
+### Manual Verification
+
+1. Add Groceries with amount `25` and Lunch with amount `10`.
+2. Search for `lunch`.
+3. Confirm that only Lunch is displayed.
+4. Select Lunch and change its amount to `15`.
+5. Clear the search.
+6. Confirm Groceries remains `25` and Lunch is `15`.
+7. Search for Lunch again and delete it.
+8. Clear the search and confirm Groceries remains.
+
+### Verification Commands
+
+```bash
+uv run pytest tests/test_transaction_search.py -v
+uv run pytest -v
+uv run python main.py
+```
+
+### Result
+
+Users can search transaction descriptions without changing stored data.
+
+Explicit row mapping preserves correct editing and deletion
+in filtered views.
+
+Phase 7C2 will add combined month and category filters.
