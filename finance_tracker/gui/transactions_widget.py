@@ -1,4 +1,4 @@
-"""Provide transaction entry, editing controls, and a read-only table."""
+"""Provide transaction entry, editing, deletion controls, and a table."""
 
 from PySide6.QtCore import QDate, Signal
 from PySide6.QtWidgets import (
@@ -24,13 +24,15 @@ class TransactionsWidget(QWidget):
     add_transaction_requested = Signal()
     save_changes_requested = Signal()
     cancel_edit_requested = Signal()
+    delete_transaction_requested = Signal()
+
     save_json_requested = Signal()
     load_json_requested = Signal()
     import_csv_requested = Signal()
     export_csv_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Build the compact form, action controls, and table."""
+        """Build the compact form, action controls, and transaction table."""
         super().__init__(parent)
         self.setObjectName("transactions_widget")
 
@@ -69,7 +71,9 @@ class TransactionsWidget(QWidget):
         self.transaction_type_input.setObjectName(
             "transaction_type_input",
         )
-        self.transaction_type_input.addItems(["Income", "Expense"])
+        self.transaction_type_input.addItems(
+            ["Income", "Expense"],
+        )
 
         self.category_input = QComboBox()
         self.category_input.setObjectName("category_input")
@@ -97,7 +101,9 @@ class TransactionsWidget(QWidget):
 
         self.tags_input = QLineEdit()
         self.tags_input.setObjectName("tags_input")
-        self.tags_input.setPlaceholderText("food, weekly, essential")
+        self.tags_input.setPlaceholderText(
+            "food, weekly, essential",
+        )
 
         fields = [
             ("Description:", self.description_input, 0, 0),
@@ -126,12 +132,14 @@ class TransactionsWidget(QWidget):
         return grid
 
     def _create_submission_controls(self) -> QHBoxLayout:
-        """Create add, save changes, cancel edit, and status controls."""
+        """Create transaction actions and the shared status label."""
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(12)
 
-        self.add_transaction_button = QPushButton("Add transaction")
+        self.add_transaction_button = QPushButton(
+            "Add transaction",
+        )
         self.add_transaction_button.setObjectName(
             "add_transaction_button",
         )
@@ -140,15 +148,29 @@ class TransactionsWidget(QWidget):
         )
 
         self.save_changes_button = QPushButton("Save changes")
-        self.save_changes_button.setObjectName("save_changes_button")
+        self.save_changes_button.setObjectName(
+            "save_changes_button",
+        )
         self.save_changes_button.clicked.connect(
             self.save_changes_requested.emit,
         )
 
         self.cancel_edit_button = QPushButton("Cancel edit")
-        self.cancel_edit_button.setObjectName("cancel_edit_button")
+        self.cancel_edit_button.setObjectName(
+            "cancel_edit_button",
+        )
         self.cancel_edit_button.clicked.connect(
             self.cancel_edit_requested.emit,
+        )
+
+        self.delete_transaction_button = QPushButton(
+            "Delete transaction",
+        )
+        self.delete_transaction_button.setObjectName(
+            "delete_transaction_button",
+        )
+        self.delete_transaction_button.clicked.connect(
+            self.delete_transaction_requested.emit,
         )
 
         self.transaction_status_label = QLabel()
@@ -160,6 +182,7 @@ class TransactionsWidget(QWidget):
         controls.addWidget(self.add_transaction_button)
         controls.addWidget(self.save_changes_button)
         controls.addWidget(self.cancel_edit_button)
+        controls.addWidget(self.delete_transaction_button)
         controls.addWidget(self.transaction_status_label, 1)
 
         return controls
@@ -231,8 +254,16 @@ class TransactionsWidget(QWidget):
         table.setObjectName("transaction_table")
         table.setColumnCount(6)
         table.setHorizontalHeaderLabels(
-            ["Date", "Description", "Type", "Category", "Amount", "Tags"],
+            [
+                "Date",
+                "Description",
+                "Type",
+                "Category",
+                "Amount",
+                "Tags",
+            ],
         )
+
         table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers,
         )
@@ -243,7 +274,7 @@ class TransactionsWidget(QWidget):
             QTableWidget.SelectionMode.SingleSelection,
         )
 
-        # Row numbers currently correspond to account list positions.
+        # Keep table rows aligned with account list positions.
         table.setSortingEnabled(False)
 
         table.horizontalHeader().setSectionResizeMode(
@@ -253,17 +284,22 @@ class TransactionsWidget(QWidget):
         return table
 
     def set_edit_mode(self, editing: bool) -> None:
-        """Enable either transaction entry or edit actions."""
+        """Enable entry actions or actions for the selected transaction."""
         self.add_transaction_button.setEnabled(not editing)
         self.save_changes_button.setEnabled(editing)
         self.cancel_edit_button.setEnabled(editing)
+        self.delete_transaction_button.setEnabled(editing)
 
     def load_transaction(self, transaction: dict) -> None:
-        """Copy a transaction's values into the input widgets."""
-        self.description_input.setText(transaction["description"])
+        """Copy stored transaction values into the form."""
+        self.description_input.setText(
+            transaction["description"],
+        )
 
-        # Preserve the stored precision until the user changes the amount.
-        self.amount_input.setText(str(transaction["amount"]))
+        # Preserve stored precision when loading the amount for editing.
+        self.amount_input.setText(
+            str(transaction["amount"]),
+        )
 
         self.transaction_type_input.setCurrentText(
             transaction["transaction_type"].value.title(),
@@ -272,7 +308,10 @@ class TransactionsWidget(QWidget):
             transaction["category"].value.title(),
         )
         self.date_input.setDate(
-            QDate.fromString(transaction["date"], "yyyy-MM-dd"),
+            QDate.fromString(
+                transaction["date"],
+                "yyyy-MM-dd",
+            ),
         )
         self.tags_input.setText(
             ", ".join(sorted(transaction["tags"])),

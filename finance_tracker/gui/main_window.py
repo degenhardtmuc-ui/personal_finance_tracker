@@ -1,9 +1,14 @@
-"""Coordinate session data, transaction editing, and financial views."""
+"""Coordinate session data, transaction editing, deletion, and views."""
 
 from math import isfinite
 
 from PySide6.QtCore import QSignalBlocker
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QTabWidget
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QMainWindow,
+    QMessageBox,
+    QTabWidget,
+)
 
 from finance_tracker.account import add_transaction, create_account
 from finance_tracker.budget import create_budget_tracker, set_budget
@@ -57,7 +62,10 @@ class MainWindow(QMainWindow):
     def _create_transactions_tab(self) -> None:
         """Embed transaction controls and connect operation requests."""
         self.transactions_widget = TransactionsWidget()
-        self.tab_widget.addTab(self.transactions_widget, "Transactions")
+        self.tab_widget.addTab(
+            self.transactions_widget,
+            "Transactions",
+        )
 
         # Each alias references the existing widget, not a copy.
         widget_names = [
@@ -70,6 +78,7 @@ class MainWindow(QMainWindow):
             "add_transaction_button",
             "save_changes_button",
             "cancel_edit_button",
+            "delete_transaction_button",
             "transaction_status_label",
             "save_json_button",
             "load_json_button",
@@ -79,7 +88,11 @@ class MainWindow(QMainWindow):
         ]
 
         for name in widget_names:
-            setattr(self, name, getattr(self.transactions_widget, name))
+            setattr(
+                self,
+                name,
+                getattr(self.transactions_widget, name),
+            )
 
         self.transactions_widget.add_transaction_requested.connect(
             self._handle_add_transaction,
@@ -89,6 +102,9 @@ class MainWindow(QMainWindow):
         )
         self.transactions_widget.cancel_edit_requested.connect(
             self._handle_cancel_edit,
+        )
+        self.transactions_widget.delete_transaction_requested.connect(
+            self._handle_delete_transaction,
         )
         self.transactions_widget.save_json_requested.connect(
             self._handle_save_json,
@@ -102,6 +118,7 @@ class MainWindow(QMainWindow):
         self.transactions_widget.export_csv_requested.connect(
             self._handle_export_csv,
         )
+
         self.transaction_table.itemSelectionChanged.connect(
             self._handle_transaction_selection,
         )
@@ -109,23 +126,35 @@ class MainWindow(QMainWindow):
     def _create_dashboard_tab(self) -> None:
         """Embed the dashboard and preserve existing widget access."""
         self.dashboard_widget = DashboardWidget()
-        self.tab_widget.addTab(self.dashboard_widget, "Dashboard")
+        self.tab_widget.addTab(
+            self.dashboard_widget,
+            "Dashboard",
+        )
 
-        for name in [
+        widget_names = [
             "income_total_label",
             "expense_total_label",
             "balance_label",
             "monthly_summary_table",
             "category_breakdown_table",
-        ]:
-            setattr(self, name, getattr(self.dashboard_widget, name))
+        ]
+
+        for name in widget_names:
+            setattr(
+                self,
+                name,
+                getattr(self.dashboard_widget, name),
+            )
 
     def _create_budgets_tab(self) -> None:
         """Embed budget controls and connect operation requests."""
         self.budget_widget = BudgetWidget()
-        self.tab_widget.addTab(self.budget_widget, "Budgets")
+        self.tab_widget.addTab(
+            self.budget_widget,
+            "Budgets",
+        )
 
-        for name in [
+        widget_names = [
             "budget_category_input",
             "budget_limit_input",
             "budget_month_input",
@@ -134,8 +163,14 @@ class MainWindow(QMainWindow):
             "save_budgets_button",
             "load_budgets_button",
             "budget_table",
-        ]:
-            setattr(self, name, getattr(self.budget_widget, name))
+        ]
+
+        for name in widget_names:
+            setattr(
+                self,
+                name,
+                getattr(self.budget_widget, name),
+            )
 
         self.budget_widget.set_budget_requested.connect(
             self._handle_set_budget,
@@ -156,11 +191,23 @@ class MainWindow(QMainWindow):
         self.monthly_chart = MonthlyChartWidget()
         self.budget_chart = BudgetChartWidget()
 
-        self.chart_tabs.addTab(self.category_chart, "Categories")
-        self.chart_tabs.addTab(self.monthly_chart, "Monthly")
-        self.chart_tabs.addTab(self.budget_chart, "Budgets")
+        self.chart_tabs.addTab(
+            self.category_chart,
+            "Categories",
+        )
+        self.chart_tabs.addTab(
+            self.monthly_chart,
+            "Monthly",
+        )
+        self.chart_tabs.addTab(
+            self.budget_chart,
+            "Budgets",
+        )
 
-        self.tab_widget.addTab(self.chart_tabs, "Charts")
+        self.tab_widget.addTab(
+            self.chart_tabs,
+            "Charts",
+        )
 
     def _read_transaction_form(self) -> dict | None:
         """Create a validated transaction or display a validation error."""
@@ -196,7 +243,10 @@ class MainWindow(QMainWindow):
                 tags=self._parse_tags(self.tags_input.text()),
             )
         except ValueError as error:
-            show_error(self.transaction_status_label, str(error))
+            show_error(
+                self.transaction_status_label,
+                str(error),
+            )
             return None
 
     def _handle_add_transaction(self) -> None:
@@ -205,6 +255,7 @@ class MainWindow(QMainWindow):
             return
 
         transaction = self._read_transaction_form()
+
         if transaction is None:
             return
 
@@ -230,11 +281,13 @@ class MainWindow(QMainWindow):
             return
 
         index = selected_rows[0].row()
+
         if not 0 <= index < len(self.account["transactions"]):
             self._finish_edit()
             return
 
         self._editing_transaction_index = index
+
         self.transactions_widget.load_transaction(
             self.account["transactions"][index],
         )
@@ -256,6 +309,7 @@ class MainWindow(QMainWindow):
             return
 
         transaction = self._read_transaction_form()
+
         if transaction is None:
             return
 
@@ -267,12 +321,58 @@ class MainWindow(QMainWindow):
             "Transaction updated successfully.",
         )
 
+    def _handle_delete_transaction(self) -> None:
+        """Delete the selected stored transaction after confirmation."""
+        index = self._editing_transaction_index
+
+        if index is None:
+            return
+
+        if not 0 <= index < len(self.account["transactions"]):
+            self._finish_edit()
+            show_error(
+                self.transaction_status_label,
+                "The selected transaction is no longer available.",
+            )
+            return
+
+        transaction = self.account["transactions"][index]
+
+        answer = QMessageBox.question(
+            self,
+            "Delete transaction",
+            (
+                "Delete this stored transaction?\n\n"
+                f"Description: {transaction['description']}\n"
+                f"Amount: {transaction['amount']:.2f}\n"
+                f"Type: {transaction['transaction_type'].value.title()}\n"
+                f"Category: {transaction['category'].value.title()}\n"
+                f"Date: {transaction['date']}\n\n"
+                "Unsaved form changes will also be discarded."
+            ),
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        del self.account["transactions"][index]
+        self._refresh_transaction_table()
+
+        show_success(
+            self.transaction_status_label,
+            "Transaction deleted successfully.",
+        )
+
     def _handle_cancel_edit(self) -> None:
         """Discard unsaved form changes and return to entry mode."""
         if self._editing_transaction_index is None:
             return
 
         self._finish_edit()
+
         show_success(
             self.transaction_status_label,
             "Editing cancelled. No changes were saved.",
@@ -282,7 +382,7 @@ class MainWindow(QMainWindow):
         """Clear selection and editing state without changing account data."""
         self._editing_transaction_index = None
 
-        # Programmatic selection changes must not load another transaction.
+        # Avoid loading a transaction during programmatic selection changes.
         with QSignalBlocker(self.transaction_table):
             self.transaction_table.clearSelection()
             self.transaction_table.setCurrentCell(-1, -1)
@@ -298,8 +398,10 @@ class MainWindow(QMainWindow):
             "account.json",
             "JSON files (*.json)",
         )
+
         if not selected_path:
             return
+
         if not selected_path.lower().endswith(".json"):
             selected_path = f"{selected_path}.json"
 
@@ -325,6 +427,7 @@ class MainWindow(QMainWindow):
             "",
             "JSON files (*.json)",
         )
+
         if not selected_path:
             return
 
@@ -353,11 +456,15 @@ class MainWindow(QMainWindow):
             "",
             "CSV files (*.csv)",
         )
+
         if not selected_path:
             return
 
         try:
-            result = import_transactions(self.account, selected_path)
+            result = import_transactions(
+                self.account,
+                selected_path,
+            )
         except (OSError, TypeError, ValueError) as error:
             show_error(
                 self.transaction_status_label,
@@ -373,9 +480,15 @@ class MainWindow(QMainWindow):
         )
 
         if result["skipped"]:
-            show_error(self.transaction_status_label, message)
+            show_error(
+                self.transaction_status_label,
+                message,
+            )
         else:
-            show_success(self.transaction_status_label, message)
+            show_success(
+                self.transaction_status_label,
+                message,
+            )
 
     def _handle_export_csv(self) -> None:
         """Export stored transactions without applying unsaved form edits."""
@@ -385,8 +498,10 @@ class MainWindow(QMainWindow):
             "transactions.csv",
             "CSV files (*.csv)",
         )
+
         if not selected_path:
             return
+
         if not selected_path.lower().endswith(".csv"):
             selected_path = f"{selected_path}.csv"
 
@@ -434,10 +549,14 @@ class MainWindow(QMainWindow):
                 month=self.budget_month_input.date().toString("yyyy-MM"),
             )
         except ValueError as error:
-            show_error(self.budget_status_label, str(error))
+            show_error(
+                self.budget_status_label,
+                str(error),
+            )
             return
 
         self._refresh_budget_table()
+
         show_success(
             self.budget_status_label,
             "Budget saved for this session.",
@@ -451,8 +570,10 @@ class MainWindow(QMainWindow):
             "budgets.json",
             "JSON files (*.json)",
         )
+
         if not selected_path:
             return
+
         if not selected_path.lower().endswith(".json"):
             selected_path = f"{selected_path}.json"
 
@@ -478,6 +599,7 @@ class MainWindow(QMainWindow):
             "",
             "JSON files (*.json)",
         )
+
         if not selected_path:
             return
 
@@ -516,11 +638,20 @@ class MainWindow(QMainWindow):
 
     def _refresh_budget_table(self) -> None:
         """Refresh the budget table and comparison chart."""
-        self.budget_widget.refresh(self.budget_tracker, self.account)
-        self.budget_chart.refresh(self.budget_tracker, self.account)
+        self.budget_widget.refresh(
+            self.budget_tracker,
+            self.account,
+        )
+        self.budget_chart.refresh(
+            self.budget_tracker,
+            self.account,
+        )
 
-    def _append_transaction_to_table(self, transaction: dict) -> None:
-        """Render one transaction without triggering selection handling."""
+    def _append_transaction_to_table(
+        self,
+        transaction: dict,
+    ) -> None:
+        """Render a transaction without triggering selection handling."""
         with QSignalBlocker(self.transaction_table):
             self.transactions_widget.append_transaction(transaction)
 
