@@ -3530,3 +3530,326 @@ The monthly chart compares income and expenses using existing analysis,
 chronological ordering, and automatic account refresh.
 
 Phase 6D3 will add a comparison of budget limits and actual spending.
+## Phase 6D3 - Budget Limit and Spending Chart
+
+### Goal
+
+Compare each monthly budget limit with its actual matching expenses.
+
+The Charts tab now contains three financial views:
+
+- **Categories:** Expense totals by category.
+- **Monthly:** Income and expenses by month.
+- **Budgets:** Budget limits compared with actual spending.
+
+### Changes
+
+- Added a standalone `BudgetChartWidget`.
+- Reused the existing `calculate_spent_amount` budget function.
+- Displayed Limit and Spent as paired horizontal bars.
+- Labelled each budget with its month and category.
+- Sorted budgets chronologically and then by category.
+- Added amount labels, a legend, and an empty-state message.
+- Added the Budgets chart subtab.
+- Connected chart updates to the existing budget refresh flow.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/budget_chart.py` | Creates and refreshes the budget comparison chart |
+| `finance_tracker/gui/main_window.py` | Embeds the chart and supplies current session data |
+| `tests/test_budget_chart.py` | Tests limits, matching expenses, refresh, and integration |
+
+The existing Matplotlib dependency is reused.
+
+### Data Sources
+
+The chart receives both current data structures:
+
+```python
+refresh(budget_tracker, account)
+```
+
+- The budget tracker supplies category, month, and monthly limit.
+- The account supplies the transactions used to calculate spending.
+
+The widget does not own a separate account or budget tracker.
+
+### Matching Expenses
+
+```python
+calculate_spent_amount(budget, account)
+```
+
+The existing domain function calculates spending for the budget's:
+
+- Category.
+- Month.
+
+Income transactions are excluded.
+Expenses in other categories or months do not contribute to that budget.
+
+The chart therefore uses the same spending calculation
+as the budget overview table.
+
+### Budget Ordering
+
+```python
+budgets = sorted(
+    budget_tracker["budgets"],
+    key=lambda budget: (
+        budget["month"],
+        budget["category"].value,
+    ),
+)
+```
+
+Budgets are sorted by month first and by category within each month.
+
+Separate monthly budgets for the same category remain separate entries.
+
+### Budget Labels
+
+Each entry combines its month and category:
+
+```text
+2026-10 · Food
+```
+
+This distinguishes budgets for the same category
+across different months.
+
+### Paired Horizontal Bars
+
+Each budget receives two bars:
+
+| Series | Colour | Meaning |
+| --- | --- | --- |
+| Limit | Grey | Planned monthly expense limit |
+| Spent | Orange | Actual matching expenses |
+
+The bars are slightly offset vertically around
+the same budget position.
+
+```python
+position - bar_height / 2
+position + bar_height / 2
+```
+
+`barh` draws horizontal bars.
+`invert_yaxis` places the first sorted budget at the top.
+
+The legend identifies both series.
+Amount labels show their exact displayed values.
+
+### Axis Range and Overspending
+
+```python
+maximum = max(limits + spent)
+```
+
+The horizontal axis considers both limits and spending.
+
+This allows spending above the budget limit
+to remain fully visible.
+
+The upper limit includes additional room for amount labels.
+If all values are zero, the chart uses a valid range from zero to one.
+
+The axis starts at zero and is labelled `Amount`.
+
+### Interpretation
+
+For a Food budget of `100`:
+
+| Matching expenses | Chart comparison |
+| ---: | --- |
+| 0 | Spent is zero; Limit remains 100 |
+| 25 | Spent is shorter than Limit |
+| 100 | Spent equals Limit |
+| 125 | Spent extends beyond Limit |
+
+The chart displays absolute amounts rather than usage percentages.
+
+Spent remains orange when the limit is exceeded.
+Overspending is visible through the bar length and value labels.
+
+The main Budgets table continues to display remaining amount,
+usage percentage, and budget status.
+
+### Empty State
+
+Without budget entries, the chart displays:
+
+```text
+No budgets yet.
+```
+
+No bars are drawn, and axis ticks are hidden.
+
+A budget without matching expenses still displays its limit
+and a Spent bar with width zero.
+
+### Refresh Behaviour
+
+Before rebuilding the chart:
+
+```python
+self.axes.clear()
+```
+
+This removes old bars, labels, legends, and empty-state text.
+
+```python
+self.canvas.draw_idle()
+```
+
+The canvas schedules a redraw through GUI event processing.
+
+### Main Window Integration
+
+The chart is added to the existing chart subtabs:
+
+```python
+self.chart_tabs.addTab(
+    self.budget_chart,
+    "Budgets",
+)
+```
+
+The budget refresh method updates both the table and diagram:
+
+```python
+self.budget_widget.refresh(
+    self.budget_tracker,
+    self.account,
+)
+self.budget_chart.refresh(
+    self.budget_tracker,
+    self.account,
+)
+```
+
+This shared method is used after:
+
+- Setting a budget.
+- Loading budgets from JSON.
+- Adding a transaction through the account refresh flow.
+- Loading an account from JSON.
+- Importing transactions from CSV.
+
+A separate budget-chart call in `_refresh_dashboard`
+is unnecessary because it already calls `_refresh_budget_table`.
+
+All charts are created before the initial refresh.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added tests before `budget_chart.py` existed.
+   Pytest reported `ModuleNotFoundError` during collection.
+2. **GREEN:** Implemented the chart, subtab, and refresh integration.
+3. **Verification:** All existing and new tests passed.
+
+RED and GREEN evidence are documented together for this step.
+
+### New Chart Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_empty_budget_chart_displays_message` | Checks the empty state and absence of bars |
+| `test_budget_chart_displays_limits_and_matching_expenses` | Checks chronological ordering, limits, and spending matched by category and month |
+| `test_budget_chart_refresh_removes_previous_bars` | Checks removal of outdated chart data |
+| `test_main_window_refreshes_budget_chart_after_changes` | Checks updates after budget submission and transaction entry |
+
+The spending test includes an exceeded budget,
+an expense in another category, and an income transaction.
+
+The tests inspect chart labels and bar values.
+Rendered appearance is additionally checked manually.
+
+**Complete test result: 186 passed.**
+
+### Test Evidence
+
+**RED - Before implementation**
+
+![Phase 6D3 TDD RED](docs/phase_6d3_tdd_red.png)
+
+**GREEN - All 186 tests passed**
+
+![Phase 6D3 TDD GREEN](docs/phase_6d3_tdd_green.png)
+
+### Budget Comparison Chart
+
+![Phase 6D3 budget chart](docs/phase_6d3_budget_chart.png)
+
+### Manual Verification
+
+In a fresh session:
+
+1. Open the main Budgets tab.
+2. Select Food, enter a limit of `100`, and select `2026-10`.
+3. Click Set budget.
+4. Open **Charts → Budgets**.
+5. Confirm Limit `100.00` and Spent `0.00`.
+6. Add a Food expense of `25` dated in October 2026.
+7. Confirm Spent `25.00`.
+8. Add another matching expense of `100`.
+9. Confirm Spent `125.00`, extending beyond the limit.
+
+Expenses from other months or categories must not increase
+this budget's spending.
+
+Existing matching transactions must be included
+when checking expected amounts.
+
+### Verification Commands
+
+Run the budget-chart tests:
+
+```bash
+uv run pytest tests/test_budget_chart.py -v
+```
+
+Run all chart test files:
+
+```bash
+uv run pytest tests/test_category_chart.py tests/test_monthly_chart.py tests/test_budget_chart.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+Start the application:
+
+```bash
+uv run python main.py
+```
+
+### Phase 6D Result
+
+| Step | Completed chart |
+| --- | --- |
+| 6D1 | Expenses by category |
+| 6D2 | Monthly income and expenses |
+| 6D3 | Budget limits and actual spending |
+
+All charts reuse the existing financial calculations
+and update from current session data.
+
+Phase 6D is complete with **186 passing tests**.
+
+### Phase 6 Completion
+
+| Section | Result |
+| --- | --- |
+| 6A - Structure | Separate transaction, dashboard, and budget widgets |
+| 6B - Layout | Compact forms, consistent spacing, and expanding tables |
+| 6C - Styling | Shared orange theme and success/error status messages |
+| 6D - Charts | Category, monthly, and budget comparison diagrams |
+
+The planned Phase 6 implementation is complete.
