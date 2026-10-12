@@ -4,10 +4,13 @@ The Personal Finance Tracker manages income and expense transactions.
 Its PySide6 desktop interface provides transaction entry, dashboard summaries,
 monthly budgets, JSON persistence, and CSV import/export.
 
-Current GitHub test suite: **138 passing tests**, verified on 11 October 2026.
-The complete Phase 5 learning workspace passed **144 tests**; two test files
-covering six additional cases have not yet been committed to this repository.
-Phase 6 will focus on GUI structure and layout.
+Current local test suite: **208 passing tests**, verified on 12 October 2026.
+
+Phase 6 introduced modular GUI components, compact layouts, a shared
+orange-accented theme, status messages, and Matplotlib charts.
+
+Phase 7 added transaction editing, confirmed deletion, description search,
+combined month/category filters, and integrated workflow tests.
 
 ## Quick start
 
@@ -31,7 +34,8 @@ uv run pytest -v
 - [Phase 3: JSON and CSV persistence](#phase-3---json-and-csv-persistence)
 - [Phase 4: PySide6 interface](#phase-4-pyside6-graphical-user-interface)
 - [Phase 5: Dashboard and budget integration](#phase-5-dashboard-and-budget-integration)
-
+- [Phase 6: GUI structure, layout, styling, and charts](#phase-6a1--extract-the-dashboard-widget)
+- [Phase 7: Transaction editing, deletion, search, and filters](#phase-7a---edit-existing-transactions)
 
 ## Phase 1 features
 
