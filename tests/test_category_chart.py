@@ -119,16 +119,20 @@ def test_chart_refresh_replaces_previous_expenses(application):
 
 
 def test_main_window_refreshes_chart_after_transaction(application):
-    """Embed the chart and update it after adding an expense."""
+    """Embed the category chart and update it after adding an expense."""
     window = MainWindow()
 
     try:
         chart = window.category_chart
         assert isinstance(chart, CategoryChartWidget)
 
-        index = window.tab_widget.indexOf(chart)
-        assert index >= 0
-        assert window.tab_widget.tabText(index) == "Charts"
+        charts_index = window.tab_widget.indexOf(window.chart_tabs)
+        assert charts_index >= 0
+        assert window.tab_widget.tabText(charts_index) == "Charts"
+
+        category_index = window.chart_tabs.indexOf(chart)
+        assert category_index >= 0
+        assert window.chart_tabs.tabText(category_index) == "Categories"
 
         window.description_input.setText("Groceries")
         window.amount_input.setText("25")
@@ -141,6 +145,7 @@ def test_main_window_refreshes_chart_after_transaction(application):
             bar.get_width()
             for bar in chart.axes.patches
         ]
+
         assert amounts == [25.0]
     finally:
         window.close()
