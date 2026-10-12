@@ -1,7 +1,7 @@
-"""Provide a standalone dashboard for the current account."""
+"""Provide a compact dashboard for the current account."""
 
 from PySide6.QtWidgets import (
-    QFormLayout,
+    QGridLayout,
     QHeaderView,
     QLabel,
     QTableWidget,
@@ -15,30 +15,25 @@ from finance_tracker.account import (
     calculate_expense_total,
     calculate_income_total,
 )
-from finance_tracker.analysis import category_breakdown, monthly_summary
+from finance_tracker.analysis import (
+    category_breakdown,
+    monthly_summary,
+)
 
 
 class DashboardWidget(QWidget):
-    """Display account totals, monthly summaries, and expense categories."""
+    """Display account totals and financial summary tables."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Build an empty dashboard without owning an account."""
+        """Build a compact dashboard without owning an account."""
         super().__init__(parent)
         self.setObjectName("dashboard_widget")
 
         layout = QVBoxLayout(self)
-        totals_layout = QFormLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
 
-        self.income_total_label = QLabel("0.00")
-        self.income_total_label.setObjectName("income_total_label")
-        self.expense_total_label = QLabel("0.00")
-        self.expense_total_label.setObjectName("expense_total_label")
-        self.balance_label = QLabel("0.00")
-        self.balance_label.setObjectName("balance_label")
-
-        totals_layout.addRow("Income:", self.income_total_label)
-        totals_layout.addRow("Expenses:", self.expense_total_label)
-        totals_layout.addRow("Balance:", self.balance_label)
+        layout.addLayout(self._create_totals_grid())
 
         self.monthly_summary_table = self._create_table(
             "monthly_summary_table",
@@ -49,41 +44,100 @@ class DashboardWidget(QWidget):
             ["Category", "Expenses"],
         )
 
-        layout.addLayout(totals_layout)
         layout.addWidget(QLabel("Monthly summary"))
-        layout.addWidget(self.monthly_summary_table)
+        layout.addWidget(self.monthly_summary_table, 1)
+
         layout.addWidget(QLabel("Expenses by category"))
-        layout.addWidget(self.category_breakdown_table)
+        layout.addWidget(self.category_breakdown_table, 1)
+
+    def _create_totals_grid(self) -> QGridLayout:
+        """Arrange income, expenses, and balance in three columns."""
+        grid = QGridLayout()
+        grid.setObjectName("dashboard_totals_grid")
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(8)
+
+        self.income_total_label = QLabel("0.00")
+        self.income_total_label.setObjectName(
+            "income_total_label",
+        )
+
+        self.expense_total_label = QLabel("0.00")
+        self.expense_total_label.setObjectName(
+            "expense_total_label",
+        )
+
+        self.balance_label = QLabel("0.00")
+        self.balance_label.setObjectName("balance_label")
+
+        totals = [
+            ("Income", self.income_total_label),
+            ("Expenses", self.expense_total_label),
+            ("Balance", self.balance_label),
+        ]
+
+        for column, (label_text, value_label) in enumerate(totals):
+            grid.addWidget(QLabel(label_text), 0, column)
+            grid.addWidget(value_label, 1, column)
+            grid.setColumnStretch(column, 1)
+
+        return grid
 
     @staticmethod
-    def _create_table(object_name: str, headers: list[str]) -> QTableWidget:
-        """Create a named, read-only summary table with stretching columns."""
+    def _create_table(
+        object_name: str,
+        headers: list[str],
+    ) -> QTableWidget:
+        """Create a named, read-only table with stretching columns."""
         table = QTableWidget()
         table.setObjectName(object_name)
         table.setColumnCount(len(headers))
         table.setHorizontalHeaderLabels(headers)
-        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+
+        table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers,
+        )
+        table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows,
+        )
+        table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection,
+        )
         table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch,
         )
+
         return table
 
     @staticmethod
-    def _set_rows(table: QTableWidget, rows: list[list[str]]) -> None:
-        """Replace all displayed rows without changing the account data."""
+    def _set_rows(
+        table: QTableWidget,
+        rows: list[list[str]],
+    ) -> None:
+        """Replace displayed rows without changing account data."""
         table.setRowCount(0)
         table.setRowCount(len(rows))
+
         for row, values in enumerate(rows):
             for column, value in enumerate(values):
-                table.setItem(row, column, QTableWidgetItem(value))
+                table.setItem(
+                    row,
+                    column,
+                    QTableWidgetItem(value),
+                )
 
     def refresh(self, account: dict) -> None:
-        """Rebuild every dashboard value from the explicitly supplied account."""
-        self.income_total_label.setText(f"{calculate_income_total(account):.2f}")
-        self.expense_total_label.setText(f"{calculate_expense_total(account):.2f}")
-        self.balance_label.setText(f"{calculate_balance(account):.2f}")
+        """Rebuild all dashboard values from the supplied account."""
+        self.income_total_label.setText(
+            f"{calculate_income_total(account):.2f}",
+        )
+        self.expense_total_label.setText(
+            f"{calculate_expense_total(account):.2f}",
+        )
+        self.balance_label.setText(
+            f"{calculate_balance(account):.2f}",
+        )
 
         monthly_rows = [
             [
@@ -94,10 +148,21 @@ class DashboardWidget(QWidget):
             ]
             for month, totals in monthly_summary(account).items()
         ]
-        self._set_rows(self.monthly_summary_table, monthly_rows)
+
+        self._set_rows(
+            self.monthly_summary_table,
+            monthly_rows,
+        )
 
         category_rows = [
-            [category.value.title(), f"{amount:.2f}"]
+            [
+                category.value.title(),
+                f"{amount:.2f}",
+            ]
             for category, amount in category_breakdown(account).items()
         ]
-        self._set_rows(self.category_breakdown_table, category_rows)
+
+        self._set_rows(
+            self.category_breakdown_table,
+            category_rows,
+        )
