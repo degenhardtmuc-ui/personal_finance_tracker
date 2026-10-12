@@ -3853,3 +3853,249 @@ Phase 6D is complete with **186 passing tests**.
 | 6D - Charts | Category, monthly, and budget comparison diagrams |
 
 The planned Phase 6 implementation is complete.
+## Phase 7A - Edit Existing Transactions
+
+### Goal
+
+Allow users to correct existing transactions through the transaction form.
+
+Selecting a table row loads the stored transaction values.
+Save changes replaces the selected transaction.
+Cancel edit discards unsaved form changes.
+
+### Changes
+
+- Added Save changes and Cancel edit buttons.
+- Connected table selection to transaction loading.
+- Introduced an explicit editing state in `MainWindow`.
+- Reused one validation method for adding and editing transactions.
+- Refreshed all financial views after successful changes.
+- Preserved original data when validation fails.
+- Reset editing when rebuilding the transaction table.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/transactions_widget.py` | Creates editing controls, loads form values, and switches button states |
+| `finance_tracker/gui/main_window.py` | Tracks the selected transaction, validates changes, and updates data |
+| `tests/test_transaction_editing.py` | Tests selection, editing, cancellation, and financial refresh |
+
+### Selecting a Transaction
+
+The table uses whole-row selection.
+
+Clicking a saved transaction loads:
+
+- Description.
+- Amount.
+- Transaction type.
+- Category.
+- Date.
+- Tags.
+
+The input fields do not need to be individually selected.
+The highlighted table row identifies the transaction being edited.
+
+```python
+self.transaction_table.itemSelectionChanged.connect(
+    self._handle_transaction_selection,
+)
+```
+
+### Editing State
+
+```python
+self._editing_transaction_index: int | None = None
+```
+
+`None` means that no transaction is being edited.
+
+An integer identifies the selected transaction's position
+in the account's transaction list.
+
+| Mode | Add transaction | Save changes | Cancel edit |
+| --- | --- | --- | --- |
+| Entry | Enabled | Disabled | Disabled |
+| Editing | Disabled | Enabled | Enabled |
+
+Disabling Add transaction during editing prevents
+an accidental duplicate submission.
+
+### Loading Stored Values
+
+`TransactionsWidget.load_transaction(transaction)`
+copies stored values into the existing form.
+
+The amount uses its stored numeric representation rather than
+the table's two-decimal display text.
+
+Tags are displayed as sorted, comma-separated text.
+
+The widget loads data for presentation.
+It does not modify the stored transaction.
+
+### Shared Validation
+
+```python
+transaction = self._read_transaction_form()
+```
+
+Both adding and editing use the same form-reading method.
+
+It:
+
+1. Reads the amount.
+2. Converts it into a number and rejects non-finite values.
+3. Converts type and category selections into enum values.
+4. Reads the date and parses tags.
+5. Calls `create_transaction` for domain validation.
+
+Invalid input displays an error and returns `None`.
+
+### Saving Changes
+
+After successful validation:
+
+```python
+self.account["transactions"][index] = transaction
+```
+
+The selected entry is replaced.
+A new transaction is not appended.
+
+The transaction count therefore remains unchanged.
+
+After saving:
+
+- The table is rebuilt.
+- Dashboard totals are refreshed.
+- Budget usage is refreshed.
+- All three charts are refreshed.
+- Editing ends.
+- Text fields are cleared.
+- A success message is displayed.
+
+Save changes updates the current session.
+Use Save JSON to persist the updated account to a file.
+
+### Invalid Changes
+
+If validation fails:
+
+- The original transaction remains unchanged.
+- The existing table values remain unchanged.
+- A red error message is displayed.
+- Editing remains active so the input can be corrected.
+
+### Cancel Editing
+
+Cancel edit:
+
+- Discards unsaved form input.
+- Preserves the stored transaction.
+- Clears the table selection.
+- Clears Description, Amount, and Tags.
+- Restores entry-mode button states.
+
+Type, category, and date selections remain set.
+
+Selecting another transaction loads its values
+and replaces any unsaved form edits.
+A confirmation dialog for this selection change is not implemented.
+
+### Safe Table Refresh
+
+```python
+with QSignalBlocker(self.transaction_table):
+    self.transactions_widget.refresh(self.account)
+```
+
+Programmatic table updates temporarily block table signals.
+
+This prevents selection handlers from loading outdated data
+while rows are being removed and rebuilt.
+
+`QSignalBlocker` restores the previous signal state
+after leaving the block.
+
+### Row-to-Transaction Mapping
+
+Sorting remains disabled.
+
+The table displays transactions in account-list order,
+so a row index corresponds to the transaction's list position.
+
+Future filtering or sorting must preserve an explicit mapping
+between displayed rows and stored transactions.
+
+### File Operations during Editing
+
+- Save JSON and Export CSV use stored account data,
+  excluding unsaved form edits.
+- Successful account loading or CSV import resets editing
+  when rebuilding the table.
+- Cancelled or failed file operations retain the current editing state.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added editing tests before implementing the controls and handlers.
+2. **GREEN:** Implemented selection, shared validation,
+   replacement, cancellation, and financial refresh.
+3. **Verification:** All existing and new tests passed.
+
+### New Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_edit_controls_start_disabled` | Checks initial button states |
+| `test_selecting_transaction_loads_form` | Checks all stored values and editing controls |
+| `test_save_changes_replaces_selected_transaction` | Checks replacement and every dependent financial view |
+| `test_invalid_edit_preserves_original_transaction` | Checks data preservation and continued editing |
+| `test_cancel_edit_preserves_data_and_resets_controls` | Checks cancellation, cleared selection, and entry mode |
+
+**Complete test result: 191 passed.**
+
+### Test Evidence
+
+**RED**
+
+![Phase 7A TDD RED](docs/phase_7a_tdd_red.png)
+
+**GREEN**
+
+![Phase 7A TDD GREEN](docs/phase_7a_tdd_green.png)
+
+### Transaction Editing
+
+![Phase 7A transaction editing](docs/phase_7a_transaction_editing.png)
+
+### Manual Verification
+
+1. Add a Food expense named Groceries with an amount of `25`.
+2. Click Groceries in the table.
+3. Confirm that the whole row is selected and the form shows its values.
+4. Change Amount to `40`.
+5. Click Save changes.
+6. Confirm that the same transaction now displays `40.00`.
+7. Check the updated dashboard, budgets, and charts.
+8. Select the row again and enter `abc` as the amount.
+9. Confirm that saving reports an error and preserves the original.
+10. Click Cancel edit and confirm that entry mode is restored.
+
+### Verification Commands
+
+```bash
+uv run pytest tests/test_transaction_editing.py -v
+uv run pytest -v
+uv run python main.py
+```
+
+### Result
+
+Existing transactions can now be corrected without creating duplicates.
+
+Validation protects stored data, and successful changes update
+all financial views.
+
+Phase 7B will add deletion of selected transactions after confirmation.
