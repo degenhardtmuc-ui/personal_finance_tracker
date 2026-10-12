@@ -2714,4 +2714,260 @@ The application now uses a shared light theme with orange primary actions,
 consistent input styling, clear table headers, and prominent dashboard totals.
 
 Phase 6C2 will add consistent success and error status styling.
-Phase 6D will add financial charts.
+Phase 6D will add financial charts
+## Phase 6C2 - Shared Success and Error Status Messages
+
+### Goal
+
+Provide consistent feedback for transaction, budget, and file operations.
+
+Successful actions display a green status message.
+Validation and handled storage errors display a red status message.
+
+The message text continues to explain the result independently of colour.
+
+### Changes
+
+- Added shared status helpers in `status.py`.
+- Added success and error selectors to the central stylesheet.
+- Updated `MainWindow` to use the shared helpers for action results.
+- Applied the same status appearance to Transactions and Budgets.
+- Added tests for status transitions and real form submissions.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/status.py` | Sets message text and status, then refreshes label styling |
+| `finance_tracker/gui/styles.py` | Defines success and error appearance |
+| `finance_tracker/gui/main_window.py` | Selects the appropriate status after each operation |
+| `tests/test_status_messages.py` | Tests helper behaviour and GUI integration |
+
+### Shared Helpers
+
+```python
+show_success(label, message)
+show_error(label, message)
+```
+
+Both helpers accept:
+
+- The `QLabel` that displays the result.
+- The message text.
+
+They delegate to the internal `_show_status` function with either
+`"success"` or `"error"`.
+
+The helpers affect presentation only.
+They do not modify account data, budgets, or stored files.
+
+### Message and Status Property
+
+```python
+label.setText(message)
+label.setProperty("status", status)
+```
+
+`setText` updates the visible message.
+
+`setProperty` stores a dynamic Qt property named `status`.
+The stylesheet uses this property to select the appropriate appearance.
+
+| Property value | Appearance |
+| --- | --- |
+| `success` | Green background, dark green text, and a green border |
+| `error` | Light red background, dark red text, and a red border |
+
+Labels without either property value do not match these status rules.
+
+### Refreshing the Style
+
+After changing the property, the helper reapplies the widget style:
+
+```python
+style = label.style()
+style.unpolish(label)
+style.polish(label)
+```
+
+This refreshes the appearance when a label changes
+from success to error or from error to success.
+
+```python
+label.updateGeometry()
+label.update()
+```
+
+`updateGeometry` notifies the layout that the size requirements may have changed.
+`update` schedules repainting.
+
+### Stylesheet Selectors
+
+```css
+QLabel[status="success"] {
+    background-color: #eaf5ee;
+    color: #205c35;
+    border: 1px solid #a9cfb5;
+    border-radius: 6px;
+    padding: 7px 10px;
+}
+
+QLabel[status="error"] {
+    background-color: #fff0ee;
+    color: #982b23;
+    border: 1px solid #e1b0aa;
+    border-radius: 6px;
+    padding: 7px 10px;
+}
+```
+
+The square brackets select labels by their `status` property.
+
+Both states use the same padding and border radius,
+providing consistent presentation across the application.
+
+### Transaction Status
+
+The Transactions tab displays feedback for:
+
+- Adding a transaction.
+- Saving an account as JSON.
+- Loading an account from JSON.
+- Importing transactions from CSV.
+- Exporting transactions to CSV.
+
+A valid transaction is stored before its success message is displayed.
+
+Invalid input produces an error message without storing
+the invalid transaction.
+
+### Budget Status
+
+The Budgets tab displays feedback for:
+
+- Setting a budget.
+- Saving budgets.
+- Loading budgets.
+
+An invalid monthly limit displays an error.
+After the input is corrected, a successful submission replaces
+the error message and its status.
+
+### CSV Import with Skipped Rows
+
+The import summary continues to report both counts:
+
+```text
+Imported X transaction(s); skipped Y row(s).
+```
+
+- If no rows are skipped, the summary uses the success state.
+- If rows are skipped, the summary uses the error state.
+
+Valid rows remain imported even when the summary is red.
+The red state draws attention to rejected rows.
+
+This step defines success and error states only.
+A separate warning state is not implemented.
+
+### Cancelled File Dialogs
+
+Cancelling a file dialog returns without performing the operation.
+
+The existing status message remains unchanged.
+Cancellation does not generate a new error message.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added tests before the `status.py` module existed.
+   Pytest reported `ModuleNotFoundError` during collection.
+2. **GREEN:** Implemented the helpers, stylesheet rules,
+   and handler integration.
+3. **Verification:** All existing and new tests passed.
+
+### New Status Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_show_success_sets_text_and_state` | Checks success text and property |
+| `test_show_error_replaces_previous_success` | Checks transition from success to error |
+| `test_valid_transaction_sets_success_status` | Checks transaction storage and success feedback |
+| `test_invalid_transaction_sets_error_status` | Checks error feedback without storing invalid data |
+| `test_budget_status_changes_from_error_to_success` | Checks corrected input and status replacement |
+
+The tests verify message text, status properties, and selected GUI actions.
+Rendered colours and visual appearance are checked manually.
+
+**Complete test result: 174 passed.**
+
+### Test Evidence
+
+**RED - Before implementation**
+
+![Phase 6C2 TDD RED](docs/phase_6c2_tdd_red.png)
+
+**GREEN - All 174 tests passed**
+
+![Phase 6C2 TDD GREEN](docs/phase_6c2_tdd_green.png)
+
+### Status Appearance
+
+**Error message**
+
+![Phase 6C2 error status](docs/phase_6c2_status_error.png)
+
+**Success message**
+
+![Phase 6C2 success status](docs/phase_6c2_status_success.png)
+
+### Manual Verification
+
+#### Transactions
+
+1. Enter a description and `abc` as the amount.
+2. Click Add transaction.
+3. Confirm that the validation message appears in red.
+4. Replace the amount with `25`.
+5. Submit again.
+6. Confirm that the successful submission appears in green.
+
+#### Budgets
+
+1. Enter `abc` in Monthly limit.
+2. Click Set budget and inspect the red error message.
+3. Replace the value with `100`.
+4. Submit again and inspect the green success message.
+
+The corrected action should replace both the previous text
+and its status appearance.
+
+### Verification Commands
+
+Run the new status tests:
+
+```bash
+uv run pytest tests/test_status_messages.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+Start the application:
+
+```bash
+uv run python main.py
+```
+
+### Phase 6C Result
+
+| Step | Completed improvement |
+| --- | --- |
+| 6C1 | Shared light theme with orange primary actions |
+| 6C2 | Consistent success and error status messages |
+
+Phase 6C is complete with **174 passing tests**.
+
+Phase 6D will add financial charts to complement the existing summaries.
