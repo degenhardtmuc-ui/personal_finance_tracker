@@ -2234,3 +2234,242 @@ Inputs and buttons occupy less vertical space,
 spacing is consistent, and the overview can use additional window height.
 
 The next step, Phase 6B3, will improve the Dashboard layout.
+## Phase 6B3 - Compact Dashboard Layout
+
+### Goal
+
+Improve the Dashboard tab by placing the three account totals beside each other,
+using consistent spacing, and allocating additional height to both summary tables.
+
+This completes the layout improvements introduced in Phase 6B:
+
+- **6B1:** Compact transaction layout.
+- **6B2:** Compact budget layout.
+- **6B3:** Compact dashboard layout.
+
+### Changes
+
+- Replaced the totals area's `QFormLayout` with a `QGridLayout`.
+- Arranged Income, Expenses, and Balance in three columns.
+- Placed each heading above its corresponding value.
+- Applied the same outer margins and spacing as the other tabs.
+- Assigned equal vertical stretch factors to both summary tables.
+- Preserved the existing account calculations and table contents.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/dashboard_widget.py` | Builds the dashboard layout and displays financial summaries |
+| `tests/test_dashboard_layout.py` | Tests total positions, spacing, and table stretch factors |
+
+`MainWindow` continues to own the account and passes the current data
+to `DashboardWidget.refresh(account)`.
+
+### Totals Arrangement
+
+| Grid row | Column 0 | Column 1 | Column 2 |
+| --- | --- | --- | --- |
+| 0: Headings | Income | Expenses | Balance |
+| 1: Values | Income total | Expense total | Account balance |
+
+The totals are displayed beside each other instead of in separate vertical rows.
+
+### Grid Construction
+
+```python
+for column, (label_text, value_label) in enumerate(totals):
+    grid.addWidget(QLabel(label_text), 0, column)
+    grid.addWidget(value_label, 1, column)
+    grid.setColumnStretch(column, 1)
+```
+
+`totals` contains three heading/value pairs.
+
+`enumerate` supplies the column numbers `0`, `1`, and `2`.
+Each heading is placed in row `0`, and its value is placed in row `1`.
+
+All columns receive the same stretch factor.
+Additional horizontal space is distributed between them,
+subject to minimum sizes and widget size hints.
+
+The grid's object name is `dashboard_totals_grid`.
+This provides a stable identifier for automated tests.
+
+### Margins and Spacing
+
+| Area | Setting | Value |
+| --- | --- | ---: |
+| Main layout | Left, top, right, and bottom margins | 20 |
+| Main layout | Spacing between sections | 16 |
+| Totals grid | Additional outer margins | 0 |
+| Totals grid | Horizontal spacing | 16 |
+| Totals grid | Vertical spacing | 8 |
+
+These settings follow the same layout conventions as
+the Transactions and Budgets tabs.
+
+The values are Qt layout units and follow display scaling.
+
+### Summary Tables
+
+The dashboard retains two tables:
+
+- **Monthly summary:** Month, Income, Expenses, and Balance.
+- **Expenses by category:** Category and Expenses.
+
+Their headings remain directly above the corresponding tables.
+
+### Vertical Space Allocation
+
+```python
+layout.addWidget(self.monthly_summary_table, 1)
+layout.addWidget(self.category_breakdown_table, 1)
+```
+
+Both tables receive a vertical stretch factor of `1`.
+The other sections have a stretch factor of `0`.
+
+Additional vertical space is shared between the two tables.
+Their actual heights can also depend on minimum sizes and size hints.
+
+Resizing increases the available table area.
+It does not enlarge the text or create additional data rows.
+
+### Financial Calculations
+
+The dashboard continues to use the existing domain functions:
+
+| Function | Purpose |
+| --- | --- |
+| `calculate_income_total(account)` | Calculates total income |
+| `calculate_expense_total(account)` | Calculates total expenses |
+| `calculate_balance(account)` | Calculates income minus expenses |
+| `monthly_summary(account)` | Groups financial totals by month |
+| `category_breakdown(account)` | Groups expenses by category |
+
+The layout change does not introduce a separate account model
+or duplicate the financial calculation logic.
+
+### Refresh Behaviour
+
+`refresh(account)` updates:
+
+1. The three total labels.
+2. The monthly summary table.
+3. The expense category table.
+
+The `_set_rows` helper replaces the displayed table rows
+without modifying the account dictionary.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added layout tests before implementing the new arrangement.
+   The existing dashboard did not satisfy the grid, spacing,
+   and table stretch requirements.
+2. **GREEN:** Implemented the compact totals grid and space allocation.
+3. **Verification:** All existing and new tests passed.
+
+For this step, the test, implementation, and RED/GREEN evidence
+were prepared for one combined commit rather than separate RED and GREEN commits.
+
+### New Layout Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_dashboard_totals_use_three_columns` | Checks the three total labels in row 1, columns 0 to 2 |
+| `test_dashboard_layout_has_consistent_spacing` | Checks main margins and totals-grid spacing |
+| `test_dashboard_tables_share_extra_vertical_space` | Checks equal table stretch factors |
+
+The tests verify the agreed layout settings.
+Visual inspection additionally checks the displayed interface
+and resizing behaviour.
+
+**Complete test result: 166 passed.**
+
+### Test Evidence
+
+**RED - Before implementation**
+
+![Phase 6B3 TDD RED](docs/phase_6b3_tdd_red.png)
+
+**GREEN - All 166 tests passed**
+
+![Phase 6B3 TDD GREEN](docs/phase_6b3_tdd_green.png)
+
+### Dashboard after Layout Improvements
+
+![Phase 6B3 compact dashboard layout](docs/phase_6b3_dashboard_layout.png)
+
+### Manual Verification
+
+#### Check the arrangement
+
+Open the Dashboard tab.
+
+Confirm that:
+
+- Income, Expenses, and Balance appear beside each other.
+- Monthly summary appears below the totals.
+- Expenses by category appears below the monthly table.
+
+#### Check resizing
+
+Increase the height of the Personal Finance Tracker window.
+
+Both tables should gain vertical space.
+The headings and total labels should retain approximately
+their preferred height.
+
+#### Check financial values
+
+For an empty account, add an income of `1000`
+and a Food expense of `25` in the same month.
+
+Expected totals:
+
+| Income | Expenses | Balance |
+| ---: | ---: | ---: |
+| 1000.00 | 25.00 | 975.00 |
+
+The monthly table should show the corresponding monthly totals.
+The category table should show Food expenses of `25.00`.
+
+If the account already contains transactions,
+include those transactions when checking the expected totals.
+
+### Verification Commands
+
+Run the new layout tests:
+
+```bash
+uv run pytest tests/test_dashboard_layout.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+Start the application:
+
+```bash
+uv run python main.py
+```
+
+### Phase 6B Result
+
+All three tabs now use explicitly defined spacing
+and improved space allocation.
+
+| Step | Completed layout improvement |
+| --- | --- |
+| 6B1 | Three-column transaction form and grouped file controls |
+| 6B2 | Three-column budget form and compact controls |
+| 6B3 | Three-column dashboard totals and expanding summary tables |
+
+Phase 6B is complete with **166 passing tests**.
+
+Phase 6C will introduce consistent colours, typography, and status styling.
+Phase 6D will add financial charts.
