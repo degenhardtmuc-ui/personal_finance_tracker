@@ -4525,3 +4525,281 @@ Explicit row mapping preserves correct editing and deletion
 in filtered views.
 
 Phase 7C2 will add combined month and category filters.
+## Phase 7C2 - Combined Month and Category Filters
+
+### Goal
+
+Filter transactions by month and category alongside the existing
+description search.
+
+A transaction must match every active criterion to appear in the table.
+
+### Changes
+
+- Added Month and Category dropdowns beside the search field.
+- Added All months and All categories options.
+- Populated the month dropdown from recorded transactions.
+- Combined description, month, and category matching.
+- Preserved original-index mapping for editing and deletion.
+- Retained valid filter selections during account updates.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/transactions_widget.py` | Creates filters, maintains month options, and displays matching rows |
+| `finance_tracker/gui/main_window.py` | Exposes filter controls and handles refresh requests |
+| `tests/test_transaction_filters.py` | Tests filter defaults, combinations, mapping, and edit-state reset |
+
+### Filter Controls
+
+| Control | Default | Behaviour |
+| --- | --- | --- |
+| Search description | Empty | Matches description substrings without case sensitivity |
+| Month | All months | Selects one recorded month |
+| Category | All categories | Selects one transaction category |
+
+Changes apply immediately.
+No separate Apply button is required.
+
+### Display Text and Internal Values
+
+```python
+self.month_filter.addItem("All months", None)
+self.category_filter.addItem(
+    category.value.title(),
+    category.value,
+)
+```
+
+Each dropdown item can contain a visible label and an internal value.
+
+`currentData()` reads the internal value used for filtering.
+
+`None` represents an inactive filter.
+
+### Month Options
+
+```python
+transaction["date"][:7]
+```
+
+The first seven characters of a validated `YYYY-MM-DD` date
+provide the month in `YYYY-MM` format.
+
+The widget:
+
+1. Collects months from the complete account.
+2. Removes duplicates with a set.
+3. Sorts the months chronologically.
+4. Adds them after All months.
+
+The month list is independent of the active description
+and category filters.
+
+### Preserving the Month Selection
+
+The month dropdown is rebuilt when the account view refreshes.
+
+The previous selection is retained if that month still exists.
+
+If the selected month is no longer present,
+the dropdown falls back to All months.
+
+Category options always contain the complete category enumeration.
+
+### Preventing Recursive Refresh
+
+```python
+with QSignalBlocker(self.month_filter):
+    ...
+```
+
+Rebuilding a dropdown changes its selection internally.
+
+`QSignalBlocker` temporarily suppresses those signals
+so that refreshing the month list does not trigger
+another filter refresh.
+
+The previous signal state is restored after the block.
+
+### Combined Matching
+
+Description, month, and category use AND matching.
+
+For example:
+
+| Criterion | Selection |
+| --- | --- |
+| Description | groceries |
+| Month | 2026-10 |
+| Category | Food |
+
+Only Food transactions recorded in October 2026
+whose descriptions contain groceries are displayed.
+
+```python
+if selected_month and transaction["date"][:7] != selected_month:
+    continue
+```
+
+```python
+if (
+    selected_category
+    and transaction["category"].value != selected_category
+):
+    continue
+```
+
+Non-matching transactions are skipped during table rendering.
+They remain stored in the account.
+
+### Shared Refresh Request
+
+The existing `search_changed` signal also handles dropdown changes.
+
+The main window asks the transaction widget to refresh.
+The widget reads the current values of all three controls.
+
+This keeps filtering in one rendering path.
+
+### Editing and Deletion
+
+The visible-row mapping introduced in Phase 7C1 remains in use.
+
+```python
+visible_transaction_indices
+```
+
+Each displayed row maps to its original account-list position.
+
+Editing and deletion therefore affect the correct stored entry,
+even when combined filters display only one transaction.
+
+The mapping is rebuilt after account changes.
+Table sorting remains disabled.
+
+### Filter Changes during Editing
+
+Changing search, month, or category ends an active edit.
+
+Unsaved form changes are discarded.
+Stored transaction data remains unchanged.
+
+Selection is cleared and entry-mode controls are restored.
+
+### Account Updates
+
+The active filters are reapplied after:
+
+- Adding a transaction.
+- Saving transaction changes.
+- Deleting a transaction.
+- Loading an account from JSON.
+- Importing transactions from CSV.
+
+New recorded months become available automatically.
+
+A new or edited transaction may be hidden if it does not
+match the current filters.
+
+### Financial Views and Export
+
+Filters affect the transaction table only.
+
+The complete account remains the source for:
+
+- Dashboard totals and summary tables.
+- Budget calculations.
+- Category, monthly, and budget charts.
+- JSON saving.
+- CSV export.
+
+An empty filtered table does not mean that the account is empty.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added tests before the month and category controls existed.
+2. **GREEN:** Implemented dropdowns, combined filtering,
+   and month-selection maintenance.
+3. **Verification:** Run the new filter tests, search tests,
+   and complete test suite.
+
+Expected complete test count after five new cases: **205**.
+
+### New Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_filter_controls_start_with_all_values` | Checks default selections |
+| `test_month_filter_lists_recorded_months_and_filters_rows` | Checks sorted month options and month matching |
+| `test_category_month_and_search_combine` | Checks category filtering and combined criteria |
+| `test_editing_filtered_row_updates_original_entry` | Checks correct replacement behind combined filters |
+| `test_filter_change_ends_edit_without_saving` | Checks stored data preservation and editing reset |
+
+Existing search and deletion tests continue to cover
+filtered-row mapping.
+
+### Test Evidence
+
+**RED**
+
+![Phase 7C2 TDD RED](docs/phase_7c2_tdd_red.png)
+
+**GREEN**
+
+![Phase 7C2 TDD GREEN](docs/phase_7c2_tdd_green.png)
+
+### Filter Interface
+
+![Phase 7C2 transaction filters](docs/phase_7c2_transaction_filters.png)
+
+### Manual Verification
+
+Create these expenses in a fresh session:
+
+| Description | Amount | Category | Date |
+| --- | ---: | --- | --- |
+| September groceries | 25 | Food | 2026-09-12 |
+| October groceries | 40 | Food | 2026-10-12 |
+| October bus | 10 | Transport | 2026-10-13 |
+
+Then:
+
+1. Select Month 2026-10.
+2. Select Category Food.
+3. Confirm that only October groceries appears.
+4. Enter GROCERIES in the search field.
+5. Confirm that the same matching row remains.
+6. Clear the search and restore both All options.
+7. Confirm that all three rows appear.
+
+The complete account expense total remains `75.00`
+throughout filtering.
+
+### Verification Commands
+
+Run filter and search tests:
+
+```bash
+uv run pytest tests/test_transaction_filters.py tests/test_transaction_search.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+Start the application:
+
+```bash
+uv run python main.py
+```
+
+### Result
+
+Transactions can be narrowed by description, month, and category together.
+
+Filtering preserves account data and correct editing/deletion mapping.
+The financial views continue to represent the complete account.
