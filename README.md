@@ -2971,3 +2971,286 @@ uv run python main.py
 Phase 6C is complete with **174 passing tests**.
 
 Phase 6D will add financial charts to complement the existing summaries.
+## Phase 6D1 - Expense Category Chart
+
+### Goal
+
+Add a visual overview of expense totals by category.
+
+The new Charts tab complements the existing dashboard tables
+with a horizontal bar chart.
+
+The chart uses the current account's expenses across all recorded months.
+A month filter is not part of this step.
+
+### Changes
+
+- Added Matplotlib as a project dependency.
+- Added a standalone `CategoryChartWidget`.
+- Embedded the Matplotlib canvas in the PySide6 interface.
+- Added a Charts tab to `MainWindow`.
+- Displayed expense categories as horizontal orange bars.
+- Sorted categories by expense total, largest first.
+- Added amount labels and an empty-state message.
+- Connected chart refresh to the existing account update flow.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/category_chart.py` | Creates and refreshes the expense category chart |
+| `finance_tracker/gui/main_window.py` | Embeds the chart and supplies the current account |
+| `tests/test_category_chart.py` | Tests chart values, empty state, refresh, and integration |
+| `pyproject.toml` | Declares the Matplotlib dependency |
+| `uv.lock` | Records the resolved project dependencies |
+
+### Dependency
+
+Matplotlib was added with:
+
+```bash
+uv add matplotlib
+```
+
+The chart uses Matplotlib directly.
+Seaborn is not required for this implementation.
+
+### Chart Components
+
+| Component | Purpose |
+| --- | --- |
+| `Figure` | Contains the complete diagram |
+| `FigureCanvasQTAgg` | Embeds the figure as a Qt widget |
+| `Axes` | Contains bars, axes, labels, and chart text |
+
+```python
+self.figure = Figure(
+    figsize=(7, 4),
+    layout="constrained",
+    facecolor="#f7f8fa",
+)
+self.canvas = FigureCanvasQTAgg(self.figure)
+self.axes = self.figure.add_subplot(111)
+```
+
+`layout="constrained"` helps arrange the chart and its decorations.
+
+`add_subplot(111)` creates one plotting area:
+one row, one column, and the first subplot.
+
+The canvas is placed in the widget's layout and receives
+additional available space.
+
+### Data Source
+
+```python
+totals = category_breakdown(account)
+```
+
+The chart reuses the existing domain analysis function.
+
+Expenses in the same category are summed.
+Income transactions are excluded.
+
+The widget does not own a separate account
+and does not introduce another financial calculation model.
+
+### Category Ordering
+
+```python
+sorted_totals = sorted(
+    totals.items(),
+    key=lambda item: (-item[1], item[0].value),
+)
+```
+
+Categories are sorted by descending expense amount.
+
+For equal amounts, the category value provides a stable
+secondary ordering.
+
+### Horizontal Bars
+
+```python
+bars = self.axes.barh(
+    labels,
+    amounts,
+    color="#b84a0b",
+    height=0.65,
+)
+self.axes.invert_yaxis()
+```
+
+`barh` draws horizontal bars.
+
+`invert_yaxis` places the first and largest category at the top.
+
+Horizontal bars provide room for category names
+and make the expense totals easy to compare.
+
+### Amount Labels and Appearance
+
+Each bar receives an amount label formatted to two decimal places.
+
+The chart uses:
+
+- Orange bars matching the application accent.
+- Dark labels on light surfaces.
+- A horizontal amount axis starting at zero.
+- Subtle grid lines for comparing bar lengths.
+- Additional space beyond the largest bar for its value label.
+
+The axis is labelled `Amount`.
+This step does not define a separate currency setting.
+
+Matplotlib colours are configured in the chart itself.
+The Qt stylesheet does not style the plotted bars and axes.
+
+### Empty State
+
+When the account contains no expense totals:
+
+- No bars are drawn.
+- The chart displays `No expenses yet.`
+- Axis ticks are hidden.
+
+The message is positioned using axes-relative coordinates,
+so it remains centred independently of the numeric axis range.
+
+### Refresh Behaviour
+
+```python
+self.axes.clear()
+```
+
+Each refresh removes the previous chart before rebuilding it.
+
+This prevents outdated bars or empty-state text from remaining
+after the account changes.
+
+```python
+self.canvas.draw_idle()
+```
+
+The canvas schedules a redraw through the GUI event processing.
+
+### Main Window Integration
+
+`MainWindow` creates the chart before its initial refresh:
+
+```python
+self._create_charts_tab()
+self._refresh_dashboard()
+```
+
+The chart receives the current account during the shared refresh:
+
+```python
+self.category_chart.refresh(self.account)
+```
+
+This refresh path is used after:
+
+- Adding a transaction.
+- Loading an account from JSON.
+- Importing transactions from CSV.
+
+Existing dashboard and budget updates remain available.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added tests before the chart module existed.
+   Pytest reported `ModuleNotFoundError` during collection.
+2. **GREEN:** Implemented the chart and Charts tab.
+3. **Integration correction:** Connected chart refresh to
+   `MainWindow._refresh_dashboard`.
+4. **Verification:** All existing and new tests passed.
+
+The integration test detected that a chart could exist
+without refreshing after a transaction.
+
+Adding the shared refresh call resolved that failure.
+
+RED and GREEN evidence are included together for this step.
+
+### New Chart Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_empty_chart_displays_no_expenses_message` | Checks the empty message and absence of bars |
+| `test_chart_displays_expense_totals_by_category` | Checks category sums and exclusion of income |
+| `test_chart_refresh_replaces_previous_expenses` | Checks removal of outdated bars |
+| `test_main_window_refreshes_chart_after_transaction` | Checks Charts tab integration and automatic refresh |
+
+The tests inspect chart labels and bar values.
+The rendered appearance is additionally checked manually.
+
+**Complete test result: 178 passed.**
+
+### Test Evidence
+
+**RED - Before implementation**
+
+![Phase 6D1 TDD RED](docs/phase_6d1_tdd_red.png)
+
+**GREEN - All 178 tests passed**
+
+![Phase 6D1 TDD GREEN](docs/phase_6d1_tdd_green.png)
+
+### Expense Category Chart
+
+![Phase 6D1 category chart](docs/phase_6d1_category_chart.png)
+
+### Manual Verification
+
+In a fresh session, add these transactions:
+
+| Description | Amount | Type | Category |
+| --- | ---: | --- | --- |
+| Groceries | 25 | Expense | Food |
+| Lunch | 15 | Expense | Food |
+| Bus | 10 | Expense | Transport |
+
+Expected chart totals:
+
+| Category | Expenses |
+| --- | ---: |
+| Food | 40.00 |
+| Transport | 10.00 |
+
+Food should appear above Transport.
+
+Adding an income transaction must not create an expense bar.
+
+If the account already contains expenses,
+include those values when checking the expected totals.
+
+### Verification Commands
+
+Run the chart tests:
+
+```bash
+uv run pytest tests/test_category_chart.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+Start the application:
+
+```bash
+uv run python main.py
+```
+
+### Result
+
+The Finance Tracker now displays expense totals by category
+in an embedded Matplotlib chart.
+
+The chart uses existing account analysis and refreshes
+alongside the other financial views.
+
+Phase 6D2 will add a monthly income and expense comparison.
