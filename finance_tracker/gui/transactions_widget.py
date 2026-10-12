@@ -1,4 +1,4 @@
-"""Provide transaction entry, editing, deletion controls, and a table."""
+"""Provide transaction entry, editing, deletion, and description search."""
 
 from PySide6.QtCore import QDate, Signal
 from PySide6.QtWidgets import (
@@ -19,12 +19,13 @@ from PySide6.QtWidgets import (
 
 
 class TransactionsWidget(QWidget):
-    """Display transactions and emit entry, editing, and file requests."""
+    """Display transactions and emit user operation requests."""
 
     add_transaction_requested = Signal()
     save_changes_requested = Signal()
     cancel_edit_requested = Signal()
     delete_transaction_requested = Signal()
+    search_changed = Signal(str)
 
     save_json_requested = Signal()
     load_json_requested = Signal()
@@ -32,9 +33,12 @@ class TransactionsWidget(QWidget):
     export_csv_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Build the compact form, action controls, and transaction table."""
+        """Build transaction controls and the searchable table."""
         super().__init__(parent)
         self.setObjectName("transactions_widget")
+
+        # Each visible row maps to a position in the account list.
+        self.visible_transaction_indices: list[int] = []
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -43,6 +47,7 @@ class TransactionsWidget(QWidget):
         layout.addLayout(self._create_form())
         layout.addLayout(self._create_submission_controls())
         layout.addLayout(self._create_file_controls())
+        layout.addLayout(self._create_search_controls())
 
         self.transaction_table = self._create_table()
         layout.addWidget(self.transaction_table, 1)
@@ -71,9 +76,7 @@ class TransactionsWidget(QWidget):
         self.transaction_type_input.setObjectName(
             "transaction_type_input",
         )
-        self.transaction_type_input.addItems(
-            ["Income", "Expense"],
-        )
+        self.transaction_type_input.addItems(["Income", "Expense"])
 
         self.category_input = QComboBox()
         self.category_input.setObjectName("category_input")
@@ -101,9 +104,7 @@ class TransactionsWidget(QWidget):
 
         self.tags_input = QLineEdit()
         self.tags_input.setObjectName("tags_input")
-        self.tags_input.setPlaceholderText(
-            "food, weekly, essential",
-        )
+        self.tags_input.setPlaceholderText("food, weekly, essential")
 
         fields = [
             ("Description:", self.description_input, 0, 0),
@@ -117,12 +118,10 @@ class TransactionsWidget(QWidget):
         for label_text, input_widget, label_row, column in fields:
             label = QLabel(label_text)
             label.setBuddy(input_widget)
-
             input_widget.setSizePolicy(
                 QSizePolicy.Policy.Expanding,
                 QSizePolicy.Policy.Fixed,
             )
-
             grid.addWidget(label, label_row, column)
             grid.addWidget(input_widget, label_row + 1, column)
 
@@ -137,9 +136,7 @@ class TransactionsWidget(QWidget):
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(12)
 
-        self.add_transaction_button = QPushButton(
-            "Add transaction",
-        )
+        self.add_transaction_button = QPushButton("Add transaction")
         self.add_transaction_button.setObjectName(
             "add_transaction_button",
         )
@@ -148,17 +145,13 @@ class TransactionsWidget(QWidget):
         )
 
         self.save_changes_button = QPushButton("Save changes")
-        self.save_changes_button.setObjectName(
-            "save_changes_button",
-        )
+        self.save_changes_button.setObjectName("save_changes_button")
         self.save_changes_button.clicked.connect(
             self.save_changes_requested.emit,
         )
 
         self.cancel_edit_button = QPushButton("Cancel edit")
-        self.cancel_edit_button.setObjectName(
-            "cancel_edit_button",
-        )
+        self.cancel_edit_button.setObjectName("cancel_edit_button")
         self.cancel_edit_button.clicked.connect(
             self.cancel_edit_requested.emit,
         )
@@ -247,23 +240,39 @@ class TransactionsWidget(QWidget):
 
         return controls
 
+    def _create_search_controls(self) -> QHBoxLayout:
+        """Create a live description search above the table."""
+        controls = QHBoxLayout()
+        controls.setContentsMargins(0, 0, 0, 0)
+        controls.setSpacing(12)
+
+        label = QLabel("Search description:")
+
+        self.search_input = QLineEdit()
+        self.search_input.setObjectName("search_input")
+        self.search_input.setPlaceholderText(
+            "Search descriptions; clear to show all",
+        )
+        self.search_input.setClearButtonEnabled(True)
+        self.search_input.textChanged.connect(
+            self.search_changed.emit,
+        )
+        label.setBuddy(self.search_input)
+
+        controls.addWidget(label)
+        controls.addWidget(self.search_input, 1)
+
+        return controls
+
     @staticmethod
     def _create_table() -> QTableWidget:
-        """Create the read-only transaction table in account order."""
+        """Create the read-only transaction table."""
         table = QTableWidget()
         table.setObjectName("transaction_table")
         table.setColumnCount(6)
         table.setHorizontalHeaderLabels(
-            [
-                "Date",
-                "Description",
-                "Type",
-                "Category",
-                "Amount",
-                "Tags",
-            ],
+            ["Date", "Description", "Type", "Category", "Amount", "Tags"],
         )
-
         table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers,
         )
@@ -274,13 +283,12 @@ class TransactionsWidget(QWidget):
             QTableWidget.SelectionMode.SingleSelection,
         )
 
-        # Keep table rows aligned with account list positions.
+        # Visible-row mapping follows the displayed account order.
         table.setSortingEnabled(False)
 
         table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch,
         )
-
         return table
 
     def set_edit_mode(self, editing: bool) -> None:
@@ -292,15 +300,8 @@ class TransactionsWidget(QWidget):
 
     def load_transaction(self, transaction: dict) -> None:
         """Copy stored transaction values into the form."""
-        self.description_input.setText(
-            transaction["description"],
-        )
-
-        # Preserve stored precision when loading the amount for editing.
-        self.amount_input.setText(
-            str(transaction["amount"]),
-        )
-
+        self.description_input.setText(transaction["description"])
+        self.amount_input.setText(str(transaction["amount"]))
         self.transaction_type_input.setCurrentText(
             transaction["transaction_type"].value.title(),
         )
@@ -308,17 +309,14 @@ class TransactionsWidget(QWidget):
             transaction["category"].value.title(),
         )
         self.date_input.setDate(
-            QDate.fromString(
-                transaction["date"],
-                "yyyy-MM-dd",
-            ),
+            QDate.fromString(transaction["date"], "yyyy-MM-dd"),
         )
         self.tags_input.setText(
             ", ".join(sorted(transaction["tags"])),
         )
 
     def append_transaction(self, transaction: dict) -> None:
-        """Append one validated transaction to the displayed table."""
+        """Append one transaction's display values to the table."""
         row = self.transaction_table.rowCount()
         self.transaction_table.insertRow(row)
 
@@ -339,14 +337,29 @@ class TransactionsWidget(QWidget):
             )
 
     def refresh(self, account: dict) -> None:
-        """Replace displayed rows with the supplied account transactions."""
-        self.transaction_table.setRowCount(0)
+        """Display matching rows and rebuild their account-index mapping."""
+        query = self.search_input.text().strip().casefold()
 
-        for transaction in account["transactions"]:
+        self.transaction_table.setRowCount(0)
+        self.visible_transaction_indices.clear()
+
+        for index, transaction in enumerate(account["transactions"]):
+            description = transaction["description"].casefold()
+
+            if query and query not in description:
+                continue
+
+            self.visible_transaction_indices.append(index)
             self.append_transaction(transaction)
 
+    def account_index_for_row(self, row: int) -> int | None:
+        """Return the stored account position behind a visible row."""
+        if 0 <= row < len(self.visible_transaction_indices):
+            return self.visible_transaction_indices[row]
+        return None
+
     def clear_form(self) -> None:
-        """Clear text fields while retaining category, type, and date."""
+        """Clear entry text fields without clearing the search."""
         self.description_input.clear()
         self.amount_input.clear()
         self.tags_input.clear()
