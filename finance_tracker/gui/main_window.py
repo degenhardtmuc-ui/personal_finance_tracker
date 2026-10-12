@@ -36,7 +36,7 @@ from finance_tracker.json_storage import (
     save_budgets,
 )
 from finance_tracker.transaction import create_transaction
-
+from finance_tracker.gui.styles import build_stylesheet
 
 class MainWindow(QMainWindow):
     """Manage session data and coordinate the three GUI components."""
@@ -44,7 +44,9 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         """Initialize account data, budget data, and application tabs."""
         super().__init__()
-
+        
+        self.setStyleSheet(build_stylesheet())
+        
         self.account = create_account("Personal Finance")
         self.budget_tracker = create_budget_tracker()
 
