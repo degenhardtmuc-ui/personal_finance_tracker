@@ -1954,3 +1954,283 @@ consistent spacing, and more available room for the transaction table.
 The next layout steps will improve the Budgets and Dashboard tabs.
 Colours, typography, and consistent status styling belong to Phase 6C.
 Financial charts belong to Phase 6D.
+## Phase 6B2 - Compact Budget Layout
+
+### Goal
+
+Improve the Budgets tab by arranging its inputs in one compact row,
+using consistent spacing, and giving the budget overview more available space.
+
+The layout follows the same principles introduced for Transactions in Phase 6B1.
+
+### Changes
+
+- Replaced the budget form's `QFormLayout` with a `QGridLayout`.
+- Arranged Category, Monthly limit, and Month in three columns.
+- Placed each label directly above its input.
+- Added consistent outer margins and spacing.
+- Positioned Set budget beside a wrapping status message.
+- Grouped Save budgets and Load budgets in a JSON toolbar.
+- Assigned additional vertical space to the budget table.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/budget_widget.py` | Creates the compact budget interface and displays budget usage |
+| `tests/test_budget_layout.py` | Tests input positions, spacing, and table stretch |
+
+`MainWindow` continues to manage budget data, validate submissions,
+and coordinate saving and loading.
+
+### Form Arrangement
+
+| Grid row | Column 0 | Column 1 | Column 2 |
+| --- | --- | --- | --- |
+| 0: Labels | Category | Monthly limit | Month |
+| 1: Inputs | Category selection | Limit input | Month selection |
+
+The three input fields now appear beside each other.
+This reduces the vertical space required by the form.
+
+### Grid Layout
+
+```python
+grid.addWidget(label, 0, column)
+grid.addWidget(input_widget, 1, column)
+grid.setColumnStretch(column, 1)
+```
+
+Labels occupy row `0`.
+Their corresponding inputs occupy row `1`.
+
+Each column receives the same stretch factor.
+Additional horizontal space is distributed between the columns,
+subject to widget minimum sizes and size hints.
+
+The object name `budget_form_grid` allows tests to locate the layout.
+
+### Input Size Policy
+
+```python
+input_widget.setSizePolicy(
+    QSizePolicy.Policy.Expanding,
+    QSizePolicy.Policy.Fixed,
+)
+```
+
+Inputs can expand horizontally while retaining their preferred height.
+
+### Margins and Spacing
+
+| Area | Setting | Value |
+| --- | --- | ---: |
+| Main layout | Left, top, right, and bottom margins | 20 |
+| Main layout | Spacing between sections | 16 |
+| Input grid | Additional outer margins | 0 |
+| Input grid | Horizontal spacing | 16 |
+| Input grid | Vertical spacing | 8 |
+| Submission row | Button and status spacing | 12 |
+| JSON toolbar | Spacing between items | 8 |
+
+These are Qt layout units and follow display scaling.
+
+Inner layouts have zero outer margins to avoid accumulating
+additional padding inside the main layout.
+
+### Submission and Status Row
+
+```python
+controls.addWidget(self.set_budget_button)
+controls.addWidget(self.budget_status_label, 1)
+```
+
+The status label receives the available horizontal space
+beside the Set budget button.
+
+```python
+self.budget_status_label.setWordWrap(True)
+```
+
+Longer validation or storage messages can wrap onto multiple lines.
+
+### JSON File Controls
+
+The file controls contain:
+
+- A JSON label.
+- Save budgets.
+- Load budgets.
+
+```python
+controls.addWidget(QLabel("JSON"))
+controls.addWidget(self.save_budgets_button)
+controls.addWidget(self.load_budgets_button)
+controls.addStretch(1)
+```
+
+The stretch at the end absorbs unused horizontal space
+and keeps the controls aligned to the left.
+
+### Table Space Allocation
+
+```python
+layout.addWidget(self.budget_table, 1)
+```
+
+The table receives a vertical stretch factor of `1`.
+The other main sections have a stretch factor of `0`.
+
+Additional window height is therefore preferentially allocated to the table.
+This increases the space available for displaying budget rows.
+
+It does not enlarge the text or create additional budget data.
+
+### Budget Behaviour
+
+The existing request signals remain available:
+
+- `set_budget_requested`
+- `save_budgets_requested`
+- `load_budgets_requested`
+
+`MainWindow` receives these requests and performs the corresponding operations.
+
+The overview continues to use:
+
+- `calculate_spent_amount`
+- `remaining`
+- `usage_percentage`
+- `is_exceeded`
+
+The layout refactoring preserves the existing budget calculations.
+
+### Example: Set a Monthly Budget
+
+Select:
+
+| Field | Example |
+| --- | --- |
+| Category | Food |
+| Monthly limit | 100 |
+| Month | 2026-10 |
+
+Click **Set budget**.
+
+This defines an expense limit of 100 for Food in October 2026.
+Setting a budget does not create a transaction.
+
+If no matching expenses exist, the overview displays:
+
+| Limit | Spent | Remaining | Usage | Status |
+| ---: | ---: | ---: | ---: | --- |
+| 100.00 | 0.00 | 100.00 | 0.00% | Within budget |
+
+Existing expenses for the same category and month are included automatically.
+
+For example, matching expenses of 25 produce:
+
+- Spent: 25.00.
+- Remaining: 75.00.
+- Usage: 25.00%.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added layout tests before implementing the compact form.
+   The existing widget did not satisfy the new layout requirements.
+2. **GREEN:** Implemented the grid, spacing, and table stretch.
+3. **Verification:** All existing and new tests passed.
+
+### New Layout Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_budget_inputs_use_compact_grid` | Checks the three input positions |
+| `test_budget_layout_has_consistent_spacing` | Checks main margins and grid spacing |
+| `test_budget_table_receives_extra_vertical_space` | Checks the table's stretch factor |
+
+The tests verify the agreed structural settings.
+Manual inspection checks the displayed interface and resizing behaviour.
+
+**Complete test result: 163 passed.**
+
+### Test Evidence
+
+**RED - Before implementation**
+
+![Phase 6B2 TDD RED](docs/phase_6b2_tdd_red.png)
+
+**GREEN - All 163 tests passed**
+
+![Phase 6B2 TDD GREEN](docs/phase_6b2_tdd_green.png)
+
+### Budget Interface after Layout Improvements
+
+![Phase 6B2 compact budget layout](docs/phase_6b2_budgets_layout.png)
+
+### Manual Verification
+
+#### Set a budget
+
+Select Food, enter `100` in Monthly limit, select the month,
+and click Set budget.
+
+Check the resulting table row and session confirmation message.
+
+#### Reject invalid input
+
+Enter `abc` in Monthly limit and click Set budget.
+
+Expected message:
+
+```text
+Monthly limit must be a valid number.
+```
+
+The previously stored budget should remain unchanged.
+
+#### Save and load
+
+1. Save the budget tracker as `budgets_test.json`.
+2. Change the limit to `200` and click Set budget.
+3. Load the previously saved file.
+4. Confirm that the saved limit of `100` is restored.
+
+Loading replaces the current budget tracker with the saved tracker.
+
+#### Resize the window
+
+Increase the height of the Personal Finance Tracker window.
+
+The table should gain vertical space while the input fields
+retain approximately their preferred height.
+
+### Verification Commands
+
+Run the new layout tests:
+
+```bash
+uv run pytest tests/test_budget_layout.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+Start the application:
+
+```bash
+uv run python main.py
+```
+
+### Result
+
+The Budgets tab now follows the compact layout principles
+used in the Transactions tab.
+
+Inputs and buttons occupy less vertical space,
+spacing is consistent, and the overview can use additional window height.
+
+The next step, Phase 6B3, will improve the Dashboard layout.
