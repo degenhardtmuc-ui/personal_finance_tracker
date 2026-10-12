@@ -1,9 +1,4 @@
-"""Coordinate the Personal Finance Tracker GUI and session data.
-
-The main window owns the current account and budget tracker.
-Separate widgets display transactions, dashboard summaries, and budgets.
-The main window validates submissions and performs file operations.
-"""
+"""Coordinate the Finance Tracker GUI, session data, and status messages."""
 
 from math import isfinite
 
@@ -28,6 +23,8 @@ from finance_tracker.csv_storage import (
 )
 from finance_tracker.gui.budget_widget import BudgetWidget
 from finance_tracker.gui.dashboard_widget import DashboardWidget
+from finance_tracker.gui.status import show_error, show_success
+from finance_tracker.gui.styles import build_stylesheet
 from finance_tracker.gui.transactions_widget import TransactionsWidget
 from finance_tracker.json_storage import (
     load_account,
@@ -36,17 +33,17 @@ from finance_tracker.json_storage import (
     save_budgets,
 )
 from finance_tracker.transaction import create_transaction
-from finance_tracker.gui.styles import build_stylesheet
+
 
 class MainWindow(QMainWindow):
-    """Manage session data and coordinate the three GUI components."""
+    """Manage session data and coordinate the application widgets."""
 
     def __init__(self) -> None:
-        """Initialize account data, budget data, and application tabs."""
+        """Initialize styling, session data, and application tabs."""
         super().__init__()
-        
+
         self.setStyleSheet(build_stylesheet())
-        
+
         self.account = create_account("Personal Finance")
         self.budget_tracker = create_budget_tracker()
 
@@ -189,7 +186,8 @@ class MainWindow(QMainWindow):
         try:
             amount = float(amount_text)
         except ValueError:
-            self.transaction_status_label.setText(
+            show_error(
+                self.transaction_status_label,
                 "Amount must be a valid number.",
             )
             return
@@ -213,7 +211,10 @@ class MainWindow(QMainWindow):
                 tags=tags,
             )
         except ValueError as error:
-            self.transaction_status_label.setText(str(error))
+            show_error(
+                self.transaction_status_label,
+                str(error),
+            )
             return
 
         add_transaction(self.account, transaction)
@@ -221,7 +222,8 @@ class MainWindow(QMainWindow):
         self._refresh_dashboard()
         self._clear_transaction_form()
 
-        self.transaction_status_label.setText(
+        show_success(
+            self.transaction_status_label,
             "Transaction added successfully.",
         )
 
@@ -243,12 +245,14 @@ class MainWindow(QMainWindow):
         try:
             save_account(self.account, selected_path)
         except (OSError, TypeError, ValueError) as error:
-            self.transaction_status_label.setText(
+            show_error(
+                self.transaction_status_label,
                 f"Account could not be saved: {error}",
             )
             return
 
-        self.transaction_status_label.setText(
+        show_success(
+            self.transaction_status_label,
             "Account saved successfully.",
         )
 
@@ -267,14 +271,17 @@ class MainWindow(QMainWindow):
         try:
             loaded_account = load_account(selected_path)
         except (OSError, TypeError, ValueError) as error:
-            self.transaction_status_label.setText(
+            show_error(
+                self.transaction_status_label,
                 f"Account could not be loaded: {error}",
             )
             return
 
         self.account = loaded_account
         self._refresh_transaction_table()
-        self.transaction_status_label.setText(
+
+        show_success(
+            self.transaction_status_label,
             "Account loaded successfully.",
         )
 
@@ -296,7 +303,8 @@ class MainWindow(QMainWindow):
                 selected_path,
             )
         except (OSError, TypeError, ValueError) as error:
-            self.transaction_status_label.setText(
+            show_error(
+                self.transaction_status_label,
                 f"CSV file could not be imported: {error}",
             )
             return
@@ -306,10 +314,15 @@ class MainWindow(QMainWindow):
         imported = import_result["imported"]
         skipped = import_result["skipped"]
 
-        self.transaction_status_label.setText(
+        message = (
             f"Imported {imported} transaction(s); "
-            f"skipped {skipped} row(s).",
+            f"skipped {skipped} row(s)."
         )
+
+        if skipped:
+            show_error(self.transaction_status_label, message)
+        else:
+            show_success(self.transaction_status_label, message)
 
     def _handle_export_csv(self) -> None:
         """Select a destination and export account transactions."""
@@ -329,12 +342,14 @@ class MainWindow(QMainWindow):
         try:
             export_transactions(self.account, selected_path)
         except (OSError, TypeError, ValueError) as error:
-            self.transaction_status_label.setText(
+            show_error(
+                self.transaction_status_label,
                 f"CSV file could not be exported: {error}",
             )
             return
 
-        self.transaction_status_label.setText(
+        show_success(
+            self.transaction_status_label,
             "CSV exported successfully.",
         )
 
@@ -345,13 +360,15 @@ class MainWindow(QMainWindow):
         try:
             monthly_limit = float(limit_text)
         except ValueError:
-            self.budget_status_label.setText(
+            show_error(
+                self.budget_status_label,
                 "Monthly limit must be a valid number.",
             )
             return
 
         if not isfinite(monthly_limit):
-            self.budget_status_label.setText(
+            show_error(
+                self.budget_status_label,
                 "Monthly limit must be a valid number.",
             )
             return
@@ -369,11 +386,16 @@ class MainWindow(QMainWindow):
                 month=month,
             )
         except ValueError as error:
-            self.budget_status_label.setText(str(error))
+            show_error(
+                self.budget_status_label,
+                str(error),
+            )
             return
 
         self._refresh_budget_table()
-        self.budget_status_label.setText(
+
+        show_success(
+            self.budget_status_label,
             "Budget saved for this session.",
         )
 
@@ -395,12 +417,14 @@ class MainWindow(QMainWindow):
         try:
             save_budgets(self.budget_tracker, selected_path)
         except (OSError, TypeError, ValueError) as error:
-            self.budget_status_label.setText(
+            show_error(
+                self.budget_status_label,
                 f"Budgets could not be saved: {error}",
             )
             return
 
-        self.budget_status_label.setText(
+        show_success(
+            self.budget_status_label,
             "Budgets saved successfully.",
         )
 
@@ -419,14 +443,17 @@ class MainWindow(QMainWindow):
         try:
             loaded_tracker = load_budgets(selected_path)
         except (OSError, TypeError, ValueError) as error:
-            self.budget_status_label.setText(
+            show_error(
+                self.budget_status_label,
                 f"Budgets could not be loaded: {error}",
             )
             return
 
         self.budget_tracker = loaded_tracker
         self._refresh_budget_table()
-        self.budget_status_label.setText(
+
+        show_success(
+            self.budget_status_label,
             "Budgets loaded successfully.",
         )
 

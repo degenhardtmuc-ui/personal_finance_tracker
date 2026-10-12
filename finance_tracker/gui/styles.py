@@ -4,6 +4,22 @@
 def build_stylesheet() -> str:
     """Return the application stylesheet with orange primary actions."""
     return """
+        QLabel[status="success"] {
+            background-color: #eaf5ee;
+            color: #205c35;
+            border: 1px solid #a9cfb5;
+            border-radius: 6px;
+            padding: 7px 10px;
+        }
+
+        QLabel[status="error"] {
+            background-color: #fff0ee;
+            color: #982b23;
+            border: 1px solid #e1b0aa;
+            border-radius: 6px;
+            padding: 7px 10px;
+        }
+        
         QMainWindow {
             background-color: #f7f8fa;
         }
