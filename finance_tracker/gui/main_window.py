@@ -35,6 +35,7 @@ from finance_tracker.json_storage import (
 from finance_tracker.transaction import create_transaction
 from finance_tracker.gui.category_chart import CategoryChartWidget
 from finance_tracker.gui.monthly_chart import MonthlyChartWidget
+from finance_tracker.gui.budget_chart import BudgetChartWidget
 
 
 class MainWindow(QMainWindow):
@@ -461,12 +462,13 @@ class MainWindow(QMainWindow):
         )
     
     def _create_charts_tab(self) -> None:
-        """Embed category and monthly charts in separate chart tabs."""
+        """Embed category, monthly, and budget charts in separate tabs."""
         self.chart_tabs = QTabWidget()
         self.chart_tabs.setObjectName("chart_tabs")
 
         self.category_chart = CategoryChartWidget()
         self.monthly_chart = MonthlyChartWidget()
+        self.budget_chart = BudgetChartWidget()
 
         self.chart_tabs.addTab(
             self.category_chart,
@@ -475,6 +477,10 @@ class MainWindow(QMainWindow):
         self.chart_tabs.addTab(
             self.monthly_chart,
             "Monthly",
+        )
+        self.chart_tabs.addTab(
+            self.budget_chart,
+            "Budgets",
         )
 
         self.tab_widget.addTab(
@@ -495,12 +501,16 @@ class MainWindow(QMainWindow):
         self.monthly_chart.refresh(self.account)
 
     def _refresh_budget_table(self) -> None:
-        """Refresh budget rows from current session data."""
+        """Refresh the budget overview and budget comparison chart."""
         self.budget_widget.refresh(
             self.budget_tracker,
             self.account,
         )
-
+        self.budget_chart.refresh(
+            self.budget_tracker,
+            self.account,
+        )
+    
     def _append_transaction_to_table(
         self,
         transaction: dict,
