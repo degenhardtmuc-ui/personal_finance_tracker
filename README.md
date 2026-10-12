@@ -4099,3 +4099,255 @@ Validation protects stored data, and successful changes update
 all financial views.
 
 Phase 7B will add deletion of selected transactions after confirmation.
+## Phase 7B - Confirmed Transaction Deletion
+
+### Goal
+
+Allow users to delete a selected transaction after explicit confirmation.
+
+The confirmation dialog shows the stored transaction values
+and defaults to No.
+
+### Changes
+
+- Added a Delete transaction button.
+- Enabled deletion only while a transaction is selected.
+- Added a deletion request signal to `TransactionsWidget`.
+- Connected the request to a handler in `MainWindow`.
+- Added a confirmation dialog using `QMessageBox.question`.
+- Refreshed all financial views after confirmed deletion.
+- Added automated tests for confirmation, cancellation, and empty views.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/transactions_widget.py` | Creates the delete button and emits the deletion request |
+| `finance_tracker/gui/main_window.py` | Confirms deletion, removes the stored entry, and refreshes views |
+| `tests/test_transaction_deletion.py` | Tests deletion behaviour and dependent financial updates |
+
+### Button State
+
+| Application state | Delete transaction |
+| --- | --- |
+| No selected transaction | Disabled |
+| Transaction selected | Enabled |
+| Successful deletion completed | Disabled |
+
+The button follows the existing editing state.
+
+```python
+self.delete_transaction_button.setEnabled(editing)
+```
+
+### Request Signal
+
+```python
+delete_transaction_requested = Signal()
+```
+
+The widget emits this signal when the delete button is clicked.
+
+`MainWindow` connects it to `_handle_delete_transaction`.
+
+The widget presents the controls.
+The main window coordinates changes to account data.
+
+### Selected Transaction
+
+The handler uses `_editing_transaction_index`
+to identify the selected entry.
+
+Without an index, it returns immediately.
+
+A range check prevents deletion through an invalid list position.
+The table remains unsorted so that row order matches account-list order.
+
+### Confirmation Dialog
+
+```python
+answer = QMessageBox.question(
+    self,
+    "Delete transaction",
+    message,
+    QMessageBox.StandardButton.Yes
+    | QMessageBox.StandardButton.No,
+    QMessageBox.StandardButton.No,
+)
+```
+
+The dialog displays the stored transaction's:
+
+- Description.
+- Amount.
+- Transaction type.
+- Category.
+- Date.
+
+It also explains that confirming deletion discards unsaved form changes.
+
+The default button is No.
+
+### Confirming or Cancelling
+
+```python
+if answer != QMessageBox.StandardButton.Yes:
+    return
+```
+
+Only Yes proceeds with deletion.
+
+No or closing the dialog preserves:
+
+- The stored transaction.
+- The selected row.
+- The editing state.
+- Unsaved form input.
+
+### Removing the Entry
+
+```python
+del self.account["transactions"][index]
+```
+
+This removes exactly the selected entry from the current account list.
+
+It does not remove any budget definitions.
+
+### Financial Refresh
+
+After deletion:
+
+```python
+self._refresh_transaction_table()
+```
+
+The existing refresh flow:
+
+1. Ends editing.
+2. Clears selection and text inputs.
+3. Rebuilds transaction rows.
+4. Updates dashboard totals and summary tables.
+5. Recalculates budget usage.
+6. Refreshes category, monthly, and budget charts.
+
+A green success message is then displayed:
+
+```text
+Transaction deleted successfully.
+```
+
+### Deleting the Last Transaction
+
+When the final transaction is removed:
+
+- The transaction table becomes empty.
+- Income, expenses, and balance return to zero.
+- The category chart displays No expenses yet.
+- The monthly chart displays No transactions yet.
+
+Existing budgets remain available.
+Their spending is recalculated from the remaining account data.
+
+### Persistence
+
+Deletion changes the current session.
+
+Use Save JSON to persist the updated account.
+CSV export also uses the updated stored transactions.
+
+An undo feature is not implemented in this step.
+
+### Automated Dialog Answers with Monkeypatch
+
+The tests replace the real confirmation dialog temporarily:
+
+```python
+monkeypatch.setattr(
+    QMessageBox,
+    "question",
+    lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+)
+```
+
+This simulates confirmation without waiting for a user click.
+
+The cancellation test returns No instead.
+
+`*args` and `**kwargs` allow the replacement to accept
+the dialog function's arguments.
+
+Pytest restores the original function after each test.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added deletion tests before implementing the button and handler.
+2. **GREEN:** Implemented the request signal, confirmation,
+   data removal, and refresh integration.
+3. **Verification:** Checked the new tests and complete test suite.
+
+Expected complete test count after the four new cases: **195**.
+
+### New Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_delete_button_starts_disabled` | Requires selection before deletion |
+| `test_confirmed_deletion_updates_all_views` | Checks confirmation details, data removal, and financial updates |
+| `test_cancelled_deletion_preserves_data_and_editing` | Checks that No preserves stored data and unsaved input |
+| `test_deleting_last_transaction_restores_empty_charts` | Checks the empty account and chart states |
+
+### Test Evidence
+
+**RED**
+
+![Phase 7B TDD RED](docs/phase_7b_tdd_red.png)
+
+**GREEN**
+
+![Phase 7B TDD GREEN](docs/phase_7b_tdd_green.png)
+
+### Confirmation Dialog
+
+![Phase 7B deletion confirmation](docs/phase_7b_delete_confirmation.png)
+
+### Manual Verification
+
+1. Add a test transaction.
+2. Select its table row.
+3. Click Delete transaction.
+4. Choose No and confirm that the transaction remains.
+5. Click Delete transaction again.
+6. Choose Yes.
+7. Confirm that the row disappears.
+8. Check dashboard totals, budget usage, and all charts.
+9. Confirm that entry mode is restored.
+
+### Verification Commands
+
+Run the deletion tests:
+
+```bash
+uv run pytest tests/test_transaction_deletion.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+Start the application:
+
+```bash
+uv run python main.py
+```
+
+### Result
+
+Selected transactions can now be deleted after confirmation.
+
+Cancellation preserves the current data and editing state.
+Confirmed deletion updates all dependent financial views.
+
+Phase 7C will introduce transaction filtering and search.
