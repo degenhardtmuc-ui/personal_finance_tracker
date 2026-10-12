@@ -1,6 +1,6 @@
-"""Provide transaction entry, editing, deletion, and description search."""
+"""Provide transaction entry, editing, deletion, search, and filters."""
 
-from PySide6.QtCore import QDate, Signal
+from PySide6.QtCore import QDate, QSignalBlocker, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from finance_tracker.category import Category
 
 
 class TransactionsWidget(QWidget):
@@ -33,11 +35,10 @@ class TransactionsWidget(QWidget):
     export_csv_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Build transaction controls and the searchable table."""
+        """Build transaction controls and the filtered table."""
         super().__init__(parent)
         self.setObjectName("transactions_widget")
 
-        # Each visible row maps to a position in the account list.
         self.visible_transaction_indices: list[int] = []
 
         layout = QVBoxLayout(self)
@@ -76,7 +77,9 @@ class TransactionsWidget(QWidget):
         self.transaction_type_input.setObjectName(
             "transaction_type_input",
         )
-        self.transaction_type_input.addItems(["Income", "Expense"])
+        self.transaction_type_input.addItems(
+            ["Income", "Expense"],
+        )
 
         self.category_input = QComboBox()
         self.category_input.setObjectName("category_input")
@@ -104,7 +107,9 @@ class TransactionsWidget(QWidget):
 
         self.tags_input = QLineEdit()
         self.tags_input.setObjectName("tags_input")
-        self.tags_input.setPlaceholderText("food, weekly, essential")
+        self.tags_input.setPlaceholderText(
+            "food, weekly, essential",
+        )
 
         fields = [
             ("Description:", self.description_input, 0, 0),
@@ -118,10 +123,12 @@ class TransactionsWidget(QWidget):
         for label_text, input_widget, label_row, column in fields:
             label = QLabel(label_text)
             label.setBuddy(input_widget)
+
             input_widget.setSizePolicy(
                 QSizePolicy.Policy.Expanding,
                 QSizePolicy.Policy.Fixed,
             )
+
             grid.addWidget(label, label_row, column)
             grid.addWidget(input_widget, label_row + 1, column)
 
@@ -136,7 +143,9 @@ class TransactionsWidget(QWidget):
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(12)
 
-        self.add_transaction_button = QPushButton("Add transaction")
+        self.add_transaction_button = QPushButton(
+            "Add transaction",
+        )
         self.add_transaction_button.setObjectName(
             "add_transaction_button",
         )
@@ -145,7 +154,9 @@ class TransactionsWidget(QWidget):
         )
 
         self.save_changes_button = QPushButton("Save changes")
-        self.save_changes_button.setObjectName("save_changes_button")
+        self.save_changes_button.setObjectName(
+            "save_changes_button",
+        )
         self.save_changes_button.clicked.connect(
             self.save_changes_requested.emit,
         )
@@ -241,26 +252,63 @@ class TransactionsWidget(QWidget):
         return controls
 
     def _create_search_controls(self) -> QHBoxLayout:
-        """Create a live description search above the table."""
+        """Create live description, month, and category filters."""
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(12)
 
-        label = QLabel("Search description:")
+        search_label = QLabel("Search description:")
 
         self.search_input = QLineEdit()
         self.search_input.setObjectName("search_input")
         self.search_input.setPlaceholderText(
-            "Search descriptions; clear to show all",
+            "Search descriptions",
         )
         self.search_input.setClearButtonEnabled(True)
         self.search_input.textChanged.connect(
             self.search_changed.emit,
         )
-        label.setBuddy(self.search_input)
+        search_label.setBuddy(self.search_input)
 
-        controls.addWidget(label)
-        controls.addWidget(self.search_input, 1)
+        month_label = QLabel("Month:")
+
+        self.month_filter = QComboBox()
+        self.month_filter.setObjectName("month_filter")
+        self.month_filter.addItem("All months", None)
+        month_label.setBuddy(self.month_filter)
+
+        category_label = QLabel("Category:")
+
+        self.category_filter = QComboBox()
+        self.category_filter.setObjectName("category_filter")
+        self.category_filter.addItem("All categories", None)
+
+        for category in Category:
+            self.category_filter.addItem(
+                category.value.title(),
+                category.value,
+            )
+
+        category_label.setBuddy(self.category_filter)
+
+        # Reuse the existing request to refresh the filtered table.
+        self.month_filter.currentIndexChanged.connect(
+            lambda _index: self.search_changed.emit(
+                self.search_input.text(),
+            ),
+        )
+        self.category_filter.currentIndexChanged.connect(
+            lambda _index: self.search_changed.emit(
+                self.search_input.text(),
+            ),
+        )
+
+        controls.addWidget(search_label)
+        controls.addWidget(self.search_input, 2)
+        controls.addWidget(month_label)
+        controls.addWidget(self.month_filter, 1)
+        controls.addWidget(category_label)
+        controls.addWidget(self.category_filter, 1)
 
         return controls
 
@@ -271,7 +319,14 @@ class TransactionsWidget(QWidget):
         table.setObjectName("transaction_table")
         table.setColumnCount(6)
         table.setHorizontalHeaderLabels(
-            ["Date", "Description", "Type", "Category", "Amount", "Tags"],
+            [
+                "Date",
+                "Description",
+                "Type",
+                "Category",
+                "Amount",
+                "Tags",
+            ],
         )
         table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers,
@@ -283,12 +338,13 @@ class TransactionsWidget(QWidget):
             QTableWidget.SelectionMode.SingleSelection,
         )
 
-        # Visible-row mapping follows the displayed account order.
+        # The visible-row mapping follows displayed account order.
         table.setSortingEnabled(False)
 
         table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch,
         )
+
         return table
 
     def set_edit_mode(self, editing: bool) -> None:
@@ -300,8 +356,12 @@ class TransactionsWidget(QWidget):
 
     def load_transaction(self, transaction: dict) -> None:
         """Copy stored transaction values into the form."""
-        self.description_input.setText(transaction["description"])
-        self.amount_input.setText(str(transaction["amount"]))
+        self.description_input.setText(
+            transaction["description"],
+        )
+        self.amount_input.setText(
+            str(transaction["amount"]),
+        )
         self.transaction_type_input.setCurrentText(
             transaction["transaction_type"].value.title(),
         )
@@ -309,7 +369,10 @@ class TransactionsWidget(QWidget):
             transaction["category"].value.title(),
         )
         self.date_input.setDate(
-            QDate.fromString(transaction["date"], "yyyy-MM-dd"),
+            QDate.fromString(
+                transaction["date"],
+                "yyyy-MM-dd",
+            ),
         )
         self.tags_input.setText(
             ", ".join(sorted(transaction["tags"])),
@@ -337,29 +400,70 @@ class TransactionsWidget(QWidget):
             )
 
     def refresh(self, account: dict) -> None:
-        """Display matching rows and rebuild their account-index mapping."""
+        """Apply all active filters and rebuild original account indices."""
+        self._update_month_options(account)
+
         query = self.search_input.text().strip().casefold()
+        selected_month = self.month_filter.currentData()
+        selected_category = self.category_filter.currentData()
 
         self.transaction_table.setRowCount(0)
         self.visible_transaction_indices.clear()
 
         for index, transaction in enumerate(account["transactions"]):
-            description = transaction["description"].casefold()
+            if query and query not in transaction["description"].casefold():
+                continue
 
-            if query and query not in description:
+            if (
+                selected_month
+                and transaction["date"][:7] != selected_month
+            ):
+                continue
+
+            if (
+                selected_category
+                and transaction["category"].value != selected_category
+            ):
                 continue
 
             self.visible_transaction_indices.append(index)
             self.append_transaction(transaction)
 
+    def _update_month_options(self, account: dict) -> None:
+        """List recorded months and retain the selection if available."""
+        selected_month = self.month_filter.currentData()
+
+        months = sorted(
+            {
+                transaction["date"][:7]
+                for transaction in account["transactions"]
+            },
+        )
+
+        # Avoid recursive refreshes while rebuilding the dropdown.
+        with QSignalBlocker(self.month_filter):
+            self.month_filter.clear()
+            self.month_filter.addItem("All months", None)
+
+            for month in months:
+                self.month_filter.addItem(month, month)
+
+            selected_index = self.month_filter.findData(
+                selected_month,
+            )
+            self.month_filter.setCurrentIndex(
+                selected_index if selected_index >= 0 else 0,
+            )
+
     def account_index_for_row(self, row: int) -> int | None:
         """Return the stored account position behind a visible row."""
         if 0 <= row < len(self.visible_transaction_indices):
             return self.visible_transaction_indices[row]
+
         return None
 
     def clear_form(self) -> None:
-        """Clear entry text fields without clearing the search."""
+        """Clear entry text fields while preserving search and filters."""
         self.description_input.clear()
         self.amount_input.clear()
         self.tags_input.clear()
