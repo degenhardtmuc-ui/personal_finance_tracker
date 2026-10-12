@@ -2473,3 +2473,245 @@ Phase 6B is complete with **166 passing tests**.
 
 Phase 6C will introduce consistent colours, typography, and status styling.
 Phase 6D will add financial charts.
+## Phase 6C1 - Shared Light Theme with Orange Accents
+
+### Goal
+
+Introduce a consistent visual style across Transactions, Dashboard, and Budgets.
+
+The selected design uses light surfaces, dark text, and orange accents
+for primary actions.
+
+Phase 6B improved widget arrangement and spacing.
+Phase 6C now adds shared colours, typography, and interaction styling.
+
+### Changes
+
+- Added a central `styles.py` module.
+- Applied the shared stylesheet through `MainWindow`.
+- Styled tabs, input fields, buttons, tables, and table headers.
+- Highlighted Add transaction and Set budget as primary actions.
+- Added hover, pressed, focus, and disabled button states.
+- Increased the size and weight of dashboard totals.
+- Preserved the existing layout and financial operations.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/styles.py` | Defines the shared Qt stylesheet |
+| `finance_tracker/gui/main_window.py` | Applies the stylesheet to the main window |
+| `tests/test_gui_styles.py` | Tests style definitions and integration |
+
+### Central Stylesheet
+
+```python
+def build_stylesheet() -> str:
+    """Return the application stylesheet with orange primary actions."""
+```
+
+The function returns a multiline string containing Qt Style Sheet rules.
+
+Qt Style Sheets resemble CSS but target Qt widgets.
+They support Qt-specific selectors, subcontrols, and widget states.
+
+Keeping shared styling in one module avoids repeating the same rules
+in each tab.
+
+### Main Window Integration
+
+```python
+from finance_tracker.gui.styles import build_stylesheet
+```
+
+After initializing the base window:
+
+```python
+self.setStyleSheet(build_stylesheet())
+```
+
+The stylesheet applies to the main window and its descendant widgets.
+All three tabs therefore use the same shared rules.
+
+### Colour Palette
+
+| Purpose | Colour |
+| --- | --- |
+| Main background | `#f7f8fa` |
+| Input and table surfaces | `#ffffff` |
+| Main text | `#243044` |
+| Primary orange accent | `#b84a0b` |
+| Primary action text | `#ffffff` |
+| Standard borders | `#d0d6de` |
+| Input and button borders | `#aab5c3` |
+| Table header background | `#e9edf2` |
+| Selected table row | `#fbe4d4` |
+
+The theme is explicitly light.
+It does not automatically switch to a dark theme.
+
+### Input Fields
+
+Shared rules apply to:
+
+- `QLineEdit`
+- `QComboBox`
+- `QDateEdit`
+
+Inputs use a white background, dark text, rounded borders,
+and internal padding.
+
+Focused inputs receive an orange border.
+
+The combo-box popup also receives explicit text, background,
+and selection colours to keep its entries readable.
+
+### Primary Actions
+
+The existing object names identify the two primary buttons:
+
+```css
+QPushButton#add_transaction_button,
+QPushButton#set_budget_button {
+    background-color: #b84a0b;
+    color: #ffffff;
+}
+```
+
+The `#` selector refers to the widget's `objectName`.
+
+These rules highlight transaction submission and budget submission.
+File operation buttons retain a neutral style.
+
+### Button States
+
+| State | Meaning |
+| --- | --- |
+| `:hover` | The pointer is over the button |
+| `:pressed` | The button is being pressed |
+| `:focus` | The button has keyboard focus |
+| `:disabled` | The button is unavailable |
+
+Primary actions have their own state rules.
+Their focus state includes a dark border to distinguish it
+from the orange button surface.
+
+### Tabs
+
+The stylesheet defines:
+
+- The tab content pane.
+- Normal tabs.
+- The selected tab.
+- Hovered tabs.
+
+The selected tab uses orange text and stronger font weight,
+making the active application section easier to identify.
+
+### Tables and Headers
+
+Tables use white surfaces, dark text, subtle grid lines,
+and a light orange selection background.
+
+`QHeaderView::section` styles the table headers with a separate
+background, padding, and stronger font weight.
+
+The stylesheet also defines `alternate-background-color`.
+Alternating row colours require `alternatingRowColors` to be enabled
+on the table; this step does not explicitly enable that option.
+
+### Typography
+
+The system font family is retained.
+
+- General widget text uses `14px`.
+- Dashboard total values use `22px` and bold text.
+- Primary buttons and table headers use bold text.
+
+The dashboard rules target the existing object names:
+
+- `income_total_label`
+- `expense_total_label`
+- `balance_label`
+
+### TDD - RED → GREEN
+
+1. **RED:** Added tests before the `styles.py` module existed.
+   Pytest reported `ModuleNotFoundError` during collection.
+2. **GREEN:** Implemented the central stylesheet and applied it in `MainWindow`.
+3. **Verification:** All existing and new tests passed.
+
+### New Style Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_stylesheet_defines_shared_widget_styles` | Checks that the stylesheet contains the expected widget selectors |
+| `test_stylesheet_identifies_primary_actions` | Checks selectors for both primary buttons |
+| `test_main_window_applies_shared_stylesheet` | Checks that MainWindow applies the shared stylesheet |
+
+These tests verify stylesheet structure and integration.
+They do not verify rendered colours, contrast, or platform-specific appearance.
+Those aspects require visual inspection.
+
+**Complete test result: 169 passed.**
+
+### Test Evidence
+
+**RED - Before implementation**
+
+![Phase 6C1 TDD RED](docs/phase_6c1_tdd_red.png)
+
+**GREEN - All 169 tests passed**
+
+![Phase 6C1 TDD GREEN](docs/phase_6c1_tdd_green.png)
+
+### Styled Interface
+
+#### Transactions
+
+![Phase 6C1 Transactions style](docs/phase_6c1_transactions_style.png)
+
+#### Dashboard
+
+![Phase 6C1 Dashboard style](docs/phase_6c1_dashboard_style.png)
+
+#### Budgets
+
+![Phase 6C1 Budgets style](docs/phase_6c1_budgets_style.png)
+
+### Manual Verification
+
+- Open all three tabs and check text readability.
+- Confirm that Add transaction and Set budget are orange.
+- Open selection lists and inspect their entries.
+- Move through controls with the Tab key and inspect focus indicators.
+- Select table rows and check that their text remains readable.
+- Check that existing input and file operations still work.
+
+### Verification Commands
+
+Run the new style tests:
+
+```bash
+uv run pytest tests/test_gui_styles.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+Start the application:
+
+```bash
+uv run python main.py
+```
+
+### Result
+
+The application now uses a shared light theme with orange primary actions,
+consistent input styling, clear table headers, and prominent dashboard totals.
+
+Phase 6C2 will add consistent success and error status styling.
+Phase 6D will add financial charts.
