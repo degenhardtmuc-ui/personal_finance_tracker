@@ -1,4 +1,4 @@
-"""Provide a compact transaction interface without owning account data."""
+"""Provide transaction entry, editing controls, and a read-only table."""
 
 from PySide6.QtCore import QDate, Signal
 from PySide6.QtWidgets import (
@@ -19,16 +19,18 @@ from PySide6.QtWidgets import (
 
 
 class TransactionsWidget(QWidget):
-    """Display compact transaction inputs and emit operation requests."""
+    """Display transactions and emit entry, editing, and file requests."""
 
     add_transaction_requested = Signal()
+    save_changes_requested = Signal()
+    cancel_edit_requested = Signal()
     save_json_requested = Signal()
     load_json_requested = Signal()
     import_csv_requested = Signal()
     export_csv_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Build the compact form, grouped file controls, and table."""
+        """Build the compact form, action controls, and table."""
         super().__init__(parent)
         self.setObjectName("transactions_widget")
 
@@ -41,12 +43,12 @@ class TransactionsWidget(QWidget):
         layout.addLayout(self._create_file_controls())
 
         self.transaction_table = self._create_table()
-
-        # Allocate additional vertical space to the table.
         layout.addWidget(self.transaction_table, 1)
 
+        self.set_edit_mode(False)
+
     def _create_form(self) -> QGridLayout:
-        """Arrange labels and inputs in two groups of three columns."""
+        """Arrange transaction inputs in two groups of three columns."""
         grid = QGridLayout()
         grid.setObjectName("transaction_form_grid")
         grid.setContentsMargins(0, 0, 0, 0)
@@ -67,9 +69,7 @@ class TransactionsWidget(QWidget):
         self.transaction_type_input.setObjectName(
             "transaction_type_input",
         )
-        self.transaction_type_input.addItems(
-            ["Income", "Expense"],
-        )
+        self.transaction_type_input.addItems(["Income", "Expense"])
 
         self.category_input = QComboBox()
         self.category_input.setObjectName("category_input")
@@ -97,9 +97,7 @@ class TransactionsWidget(QWidget):
 
         self.tags_input = QLineEdit()
         self.tags_input.setObjectName("tags_input")
-        self.tags_input.setPlaceholderText(
-            "food, weekly, essential",
-        )
+        self.tags_input.setPlaceholderText("food, weekly, essential")
 
         fields = [
             ("Description:", self.description_input, 0, 0),
@@ -128,19 +126,29 @@ class TransactionsWidget(QWidget):
         return grid
 
     def _create_submission_controls(self) -> QHBoxLayout:
-        """Place the submission button beside the status message."""
+        """Create add, save changes, cancel edit, and status controls."""
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(12)
 
-        self.add_transaction_button = QPushButton(
-            "Add transaction",
-        )
+        self.add_transaction_button = QPushButton("Add transaction")
         self.add_transaction_button.setObjectName(
             "add_transaction_button",
         )
         self.add_transaction_button.clicked.connect(
             self.add_transaction_requested.emit,
+        )
+
+        self.save_changes_button = QPushButton("Save changes")
+        self.save_changes_button.setObjectName("save_changes_button")
+        self.save_changes_button.clicked.connect(
+            self.save_changes_requested.emit,
+        )
+
+        self.cancel_edit_button = QPushButton("Cancel edit")
+        self.cancel_edit_button.setObjectName("cancel_edit_button")
+        self.cancel_edit_button.clicked.connect(
+            self.cancel_edit_requested.emit,
         )
 
         self.transaction_status_label = QLabel()
@@ -150,12 +158,14 @@ class TransactionsWidget(QWidget):
         self.transaction_status_label.setWordWrap(True)
 
         controls.addWidget(self.add_transaction_button)
+        controls.addWidget(self.save_changes_button)
+        controls.addWidget(self.cancel_edit_button)
         controls.addWidget(self.transaction_status_label, 1)
 
         return controls
 
     def _create_file_controls(self) -> QHBoxLayout:
-        """Group JSON and CSV buttons in one horizontal toolbar."""
+        """Group JSON and CSV operations in one toolbar."""
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(24)
@@ -167,7 +177,7 @@ class TransactionsWidget(QWidget):
         return controls
 
     def _create_json_controls(self) -> QHBoxLayout:
-        """Create the grouped account saving and loading buttons."""
+        """Create account saving and loading controls."""
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(8)
@@ -191,7 +201,7 @@ class TransactionsWidget(QWidget):
         return controls
 
     def _create_csv_controls(self) -> QHBoxLayout:
-        """Create the grouped transaction import and export buttons."""
+        """Create transaction import and export controls."""
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(8)
@@ -216,19 +226,12 @@ class TransactionsWidget(QWidget):
 
     @staticmethod
     def _create_table() -> QTableWidget:
-        """Create the read-only, six-column transaction table."""
+        """Create the read-only transaction table in account order."""
         table = QTableWidget()
         table.setObjectName("transaction_table")
         table.setColumnCount(6)
         table.setHorizontalHeaderLabels(
-            [
-                "Date",
-                "Description",
-                "Type",
-                "Category",
-                "Amount",
-                "Tags",
-            ],
+            ["Date", "Description", "Type", "Category", "Amount", "Tags"],
         )
         table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers,
@@ -239,20 +242,46 @@ class TransactionsWidget(QWidget):
         table.setSelectionMode(
             QTableWidget.SelectionMode.SingleSelection,
         )
+
+        # Row numbers currently correspond to account list positions.
+        table.setSortingEnabled(False)
+
         table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch,
         )
 
         return table
 
+    def set_edit_mode(self, editing: bool) -> None:
+        """Enable either transaction entry or edit actions."""
+        self.add_transaction_button.setEnabled(not editing)
+        self.save_changes_button.setEnabled(editing)
+        self.cancel_edit_button.setEnabled(editing)
+
+    def load_transaction(self, transaction: dict) -> None:
+        """Copy a transaction's values into the input widgets."""
+        self.description_input.setText(transaction["description"])
+
+        # Preserve the stored precision until the user changes the amount.
+        self.amount_input.setText(str(transaction["amount"]))
+
+        self.transaction_type_input.setCurrentText(
+            transaction["transaction_type"].value.title(),
+        )
+        self.category_input.setCurrentText(
+            transaction["category"].value.title(),
+        )
+        self.date_input.setDate(
+            QDate.fromString(transaction["date"], "yyyy-MM-dd"),
+        )
+        self.tags_input.setText(
+            ", ".join(sorted(transaction["tags"])),
+        )
+
     def append_transaction(self, transaction: dict) -> None:
         """Append one validated transaction to the displayed table."""
         row = self.transaction_table.rowCount()
         self.transaction_table.insertRow(row)
-
-        formatted_tags = ", ".join(
-            sorted(transaction["tags"]),
-        )
 
         values = [
             transaction["date"],
@@ -260,7 +289,7 @@ class TransactionsWidget(QWidget):
             transaction["transaction_type"].value.title(),
             transaction["category"].value.title(),
             f"{transaction['amount']:.2f}",
-            formatted_tags,
+            ", ".join(sorted(transaction["tags"])),
         ]
 
         for column, value in enumerate(values):
@@ -278,7 +307,7 @@ class TransactionsWidget(QWidget):
             self.append_transaction(transaction)
 
     def clear_form(self) -> None:
-        """Clear text fields after a successful transaction submission."""
+        """Clear text fields while retaining category, type, and date."""
         self.description_input.clear()
         self.amount_input.clear()
         self.tags_input.clear()
