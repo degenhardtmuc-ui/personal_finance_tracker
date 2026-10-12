@@ -3254,3 +3254,279 @@ The chart uses existing account analysis and refreshes
 alongside the other financial views.
 
 Phase 6D2 will add a monthly income and expense comparison.
+## Phase 6D2 - Monthly Income and Expense Chart
+
+### Goal
+
+Compare income and expenses for each recorded month.
+
+The Charts tab now contains two separate views:
+
+- **Categories:** Expense totals by category.
+- **Monthly:** Income and expenses by month.
+
+### Changes
+
+- Added a standalone `MonthlyChartWidget`.
+- Reused the existing `monthly_summary` analysis function.
+- Displayed income and expenses as grouped vertical bars.
+- Sorted months chronologically.
+- Added amount labels, axis labels, and a legend.
+- Added an empty-state message.
+- Introduced chart subtabs inside the Charts tab.
+- Updated both charts through the shared account refresh flow.
+- Adapted the existing category-chart integration test to the new tab structure.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| `finance_tracker/gui/monthly_chart.py` | Creates and refreshes the monthly comparison chart |
+| `finance_tracker/gui/main_window.py` | Embeds both charts and supplies current account data |
+| `tests/test_monthly_chart.py` | Tests monthly values, ordering, empty state, and integration |
+| `tests/test_category_chart.py` | Retains category-chart integration coverage under the new subtabs |
+
+The existing Matplotlib dependency is reused.
+
+### Chart Navigation
+
+The main Charts tab contains a `QTabWidget` named `chart_tabs`.
+
+| Subtab | Widget |
+| --- | --- |
+| Categories | `CategoryChartWidget` |
+| Monthly | `MonthlyChartWidget` |
+
+Both charts remain available through direct attributes
+on `MainWindow`.
+
+### Data Source
+
+```python
+summary = monthly_summary(account)
+```
+
+The existing analysis function supplies the monthly totals.
+
+The chart displays:
+
+- `income`
+- `expenses`
+
+The monthly net balance remains available in the Dashboard table.
+
+The chart does not own a separate account or duplicate
+the financial calculation logic.
+
+### Chronological Ordering
+
+```python
+months = sorted(summary)
+```
+
+Month keys use the format `YYYY-MM`.
+
+Sorting these keys places recorded months in chronological order,
+even when transactions were entered in a different order.
+
+Months without transactions are not automatically inserted.
+
+### Preparing the Values
+
+```python
+income = [
+    summary[month]["income"]
+    for month in months
+]
+expenses = [
+    summary[month]["expenses"]
+    for month in months
+]
+```
+
+Both lists follow the same sorted month sequence,
+keeping values and labels aligned.
+
+### Grouped Bars
+
+Each month receives a numeric position:
+
+```python
+positions = list(range(len(months)))
+bar_width = 0.36
+```
+
+Income bars are shifted left of the month's centre:
+
+```python
+position - bar_width / 2
+```
+
+Expense bars are shifted right:
+
+```python
+position + bar_width / 2
+```
+
+This places the two bars beside each other.
+
+| Series | Colour | Position |
+| --- | --- | --- |
+| Income | Green | Left |
+| Expenses | Orange | Right |
+
+The legend identifies both series.
+Amount labels provide the exact displayed totals.
+
+### Axes and Labels
+
+- Horizontal axis: `Month`.
+- Vertical axis: `Amount`.
+- Month labels are rotated by 30 degrees.
+- The amount axis starts at zero.
+- Subtle horizontal grid lines support comparison.
+
+The upper axis limit includes additional room for amount labels.
+
+If the maximum total is zero, the chart uses a valid range
+from zero to one.
+
+A recorded month with only income still has an expense bar
+with height zero, and vice versa.
+
+### Empty State
+
+Without transactions, the chart displays:
+
+```text
+No transactions yet.
+```
+
+No bars are drawn, and axis ticks are hidden.
+
+Before every refresh, `axes.clear()` removes previous bars,
+labels, legends, and empty-state text.
+
+### Main Window Integration
+
+Both charts are created before the initial shared refresh.
+
+```python
+self.chart_tabs.addTab(self.category_chart, "Categories")
+self.chart_tabs.addTab(self.monthly_chart, "Monthly")
+self.tab_widget.addTab(self.chart_tabs, "Charts")
+```
+
+The refresh flow updates both charts:
+
+```python
+self.category_chart.refresh(self.account)
+self.monthly_chart.refresh(self.account)
+```
+
+This flow runs after:
+
+- Adding a transaction.
+- Loading an account from JSON.
+- Importing transactions from CSV.
+
+Dashboard and budget updates remain part of the same flow.
+
+### TDD - RED → GREEN
+
+1. **RED:** Added tests before `monthly_chart.py` existed.
+   Pytest reported `ModuleNotFoundError` during collection.
+2. **GREEN:** Implemented the monthly chart and chart subtabs.
+3. **Regression update:** Adapted the category-chart test
+   to locate its widget inside the new subtabs.
+4. **Verification:** All existing and new tests passed.
+
+RED and GREEN evidence are documented together for this step.
+
+### New Chart Tests
+
+| Test | Coverage |
+| --- | --- |
+| `test_empty_monthly_chart_displays_message` | Checks the empty-state message and absence of bars |
+| `test_monthly_chart_displays_sorted_income_and_expenses` | Checks chronological order and monthly totals |
+| `test_monthly_chart_refresh_removes_previous_bars` | Checks removal of outdated chart data |
+| `test_main_window_refreshes_monthly_chart_after_transaction` | Checks subtab integration and automatic refresh |
+
+The category-chart integration test continues to verify
+its automatic refresh after a transaction.
+
+**Complete test result: 182 passed.**
+
+### Test Evidence
+
+**RED - Before implementation**
+
+![Phase 6D2 TDD RED](docs/phase_6d2_tdd_red.png)
+
+**GREEN - All 182 tests passed**
+
+![Phase 6D2 TDD GREEN](docs/phase_6d2_tdd_green.png)
+
+### Monthly Comparison Chart
+
+![Phase 6D2 monthly chart](docs/phase_6d2_monthly_chart.png)
+
+### Manual Verification
+
+In a fresh session, enter:
+
+| Description | Amount | Type | Category | Date |
+| --- | ---: | --- | --- | --- |
+| September salary | 900 | Income | Salary | 2026-09-01 |
+| September rent | 300 | Expense | Housing | 2026-09-02 |
+| October salary | 1000 | Income | Salary | 2026-10-01 |
+| October groceries | 40 | Expense | Food | 2026-10-12 |
+
+Open **Charts → Monthly**.
+
+Expected totals:
+
+| Month | Income | Expenses |
+| --- | ---: | ---: |
+| 2026-09 | 900.00 | 300.00 |
+| 2026-10 | 1000.00 | 40.00 |
+
+September should appear before October.
+
+The automated test also includes a September Food expense of `25`,
+so its expected September expense total is `325`.
+
+Existing account transactions must be included
+when checking the displayed totals.
+
+Also open **Charts → Categories** and confirm that
+the original category chart remains available.
+
+### Verification Commands
+
+Run both chart test files:
+
+```bash
+uv run pytest tests/test_category_chart.py tests/test_monthly_chart.py -v
+```
+
+Run the complete test suite:
+
+```bash
+uv run pytest -v
+```
+
+Start the application:
+
+```bash
+uv run python main.py
+```
+
+### Result
+
+The Charts tab now provides category and monthly financial views.
+
+The monthly chart compares income and expenses using existing analysis,
+chronological ordering, and automatic account refresh.
+
+Phase 6D3 will add a comparison of budget limits and actual spending.
